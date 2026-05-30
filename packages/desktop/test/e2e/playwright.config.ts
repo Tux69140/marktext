@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
+  globalSetup: require.resolve('./globalSetup'),
   workers: 1,
   testMatch: '**/*.spec.ts',
   use: {

@@ -73,6 +73,10 @@ export const launchElectron = async(
   const args = [projectRoot, '--user-data-dir', userDataDir].concat(userArgs)
   const env: Record<string, string> = {}
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v
+  // Some host environments export ELECTRON_RUN_AS_NODE=1, which makes the
+  // Electron binary behave like Node.js and reject Chromium/Playwright flags.
+  // Ensure E2E always launches real Electron.
+  delete env.ELECTRON_RUN_AS_NODE
   env.PERF_TESTING = 'true'
   if (options.suppressErrorDialog) env.MARKTEXT_ERROR_INTERACTION = '1'
   const app = await _electron.launch({
