@@ -73,6 +73,7 @@ export const launchElectron = async(
   const args = [projectRoot, '--user-data-dir', userDataDir].concat(userArgs)
   const env: Record<string, string> = {}
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v
+  delete env.ELECTRON_RUN_AS_NODE
   env.PERF_TESTING = 'true'
   if (options.suppressErrorDialog) env.MARKTEXT_ERROR_INTERACTION = '1'
   const app = await _electron.launch({
@@ -253,8 +254,12 @@ export const getMarkdownContent = async(
 }
 
 export const typeIntoEditor = async(page: Page, text: string): Promise<void> => {
-  await page.click('.editor-component', { timeout: 5000 })
-  await page.keyboard.type(text, { delay: 0 })
+  await placeCaretInEditor(page)
+  const previousClipboard = await page.evaluate(() => window.electron.clipboard.readText())
+  await page.evaluate((value) => window.electron.clipboard.writeText(value), text)
+  await page.keyboard.press('ControlOrMeta+V')
+  await page.waitForTimeout(100)
+  await page.evaluate((value) => window.electron.clipboard.writeText(value), previousClipboard)
 }
 
 // Muya validates selections via `node.closest('span.ag-paragraph')` — the inner

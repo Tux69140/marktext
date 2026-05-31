@@ -3,7 +3,8 @@ import type { ElectronApplication, Page } from 'playwright'
 import {
   getMarkdownContent,
   launchWithMarkdown,
-  placeCaretInEditor
+  placeCaretInEditor,
+  typeIntoEditor
 } from './helpers'
 
 const originalMarkdown = 'Persistent text for undo guard.\n'
@@ -41,8 +42,7 @@ test.describe('Undo regression guards', () => {
     const baseline = await getMarkdownContent(page, launched.app)
     expect(baseline).toContain('Persistent text for undo guard.')
 
-    await placeCaretInEditor(page)
-    await page.keyboard.type(' changed', { delay: 0 })
+    await typeIntoEditor(page, ' changed')
     await expect(page.locator('.editor-component')).toContainText(' changed')
 
     await placeCaretInEditor(page)

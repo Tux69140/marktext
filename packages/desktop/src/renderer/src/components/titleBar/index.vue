@@ -45,13 +45,17 @@
         </span>
       </div>
       <div :class="showCustomTitleBar ? 'left-toolbar title-no-drag' : 'right-toolbar'">
-        <div
-          v-if="showCustomTitleBar"
-          class="frameless-titlebar-menu title-no-drag"
-          @click.stop="handleMenuClick"
-        >
-          <span class="text-center-vertical">&#9776;</span>
-        </div>
+        <template v-if="showCustomTitleBar">
+          <button
+            v-for="(item, index) of applicationMenuItems"
+            :key="item.label"
+            class="frameless-titlebar-menu-item title-no-drag"
+            type="button"
+            @click.stop="handleMenuItemClick(index, $event)"
+          >
+            {{ item.label }}
+          </button>
+        </template>
         <el-tooltip
           v-if="wordCount"
           class="item"
@@ -186,6 +190,21 @@ const HASH = {
     full: '(with space)character'
   }
 }
+
+const formatApplicationMenuLabel = (label: string): string =>
+  label.replace(/\s*\(&.\)\s*$/, '').replace(/^&/, '')
+
+const applicationMenuItems = computed(() => [
+  { label: formatApplicationMenuLabel(t('menu.file.file')) },
+  { label: formatApplicationMenuLabel(t('menu.edit.edit')) },
+  { label: formatApplicationMenuLabel(t('menu.paragraph.title')) },
+  { label: formatApplicationMenuLabel(t('menu.format.format')) },
+  { label: formatApplicationMenuLabel(t('menu.window.window')) },
+  { label: formatApplicationMenuLabel(t('menu.theme.theme')) },
+  { label: formatApplicationMenuLabel(t('menu.view.view')) },
+  { label: formatApplicationMenuLabel(t('menu.help.help')) }
+])
+
 const windowIconMinimize = minimizePath
 const windowIconRestore = restorePath
 const windowIconMaximize = maximizePath
@@ -268,8 +287,12 @@ const handleMinimizeClick = () => {
   window.electron.windowControl.minimize()
 }
 
-const handleMenuClick = () => {
-  window.electron.windowControl.popupApplicationMenu({ x: 23, y: 20 })
+const handleMenuItemClick = (index: number, event: MouseEvent) => {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  window.electron.windowControl.popupApplicationMenuItem(index, {
+    x: Math.round(rect.left),
+    y: Math.round(rect.bottom)
+  })
 }
 
 const rename = () => {
@@ -322,7 +345,7 @@ onBeforeUnmount(() => {
 .title-bar {
   -webkit-app-region: drag;
   user-select: none;
-  background: transparent;
+  background: var(--editorBgColor);
   height: var(--titleBarHeight);
   box-sizing: border-box;
   color: var(--editorColor50);
@@ -362,6 +385,9 @@ img {
     -webkit-app-region: no-drag;
   }
 }
+.title-bar.frameless .title {
+  padding-left: min(470px, calc(100% - 170px));
+}
 div.title > span {
   /* Workaround for GH#339 */
   display: block;
@@ -393,14 +419,16 @@ div.title > span {
 }
 
 .left-toolbar {
-  padding: 0 10px;
+  padding: 0 6px;
   height: 100%;
   position: absolute;
   top: 0;
   left: 0;
-  width: 118px; /* + 2*10px padding*/
+  max-width: calc(100% - 138px);
   display: flex;
   flex-direction: row;
+  align-items: center;
+  overflow: hidden;
 }
 .right-toolbar {
   height: 100%;
@@ -453,8 +481,21 @@ div.title > span {
   left: 50%;
   transform: translateX(-50%) translateY(-50%);
 }
-.frameless-titlebar-menu {
+.frameless-titlebar-menu-item {
+  border: 0;
+  background: transparent;
   color: var(--sideBarColor);
+  cursor: default;
+  font: inherit;
+  font-size: 13px;
+  height: 24px;
+  line-height: 24px;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+.frameless-titlebar-menu-item:hover {
+  background: var(--sideBarBgColor);
+  color: var(--sideBarTitleColor);
 }
 .frameless-titlebar-close:hover {
   background-color: rgb(228, 79, 79);

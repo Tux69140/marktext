@@ -105,7 +105,9 @@ const windowControlAPI = {
   popupMenu: (template: unknown, position?: { x: number; y: number }) =>
     send('mt::menu::popup', template as never, position),
   popupApplicationMenu: (position?: { x: number; y: number }) =>
-    send('mt::menu::popup-application', position)
+    send('mt::menu::popup-application', position),
+  popupApplicationMenuItem: (index: number, position?: { x: number; y: number }) =>
+    send('mt::menu::popup-application-item', index, position)
 }
 
 // These three predicates are pure path-string operations: implementing them

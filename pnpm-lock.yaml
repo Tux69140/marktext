@@ -471,6 +471,9 @@ importers:
       '@marktext/file-icons':
         specifier: ^1.0.6
         version: 1.0.6
+      '@popperjs/core':
+        specifier: ^2.11.8
+        version: 2.11.8
       dompurify:
         specifier: ^3.4.3
         version: 3.4.3
@@ -480,6 +483,9 @@ importers:
       execall:
         specifier: ^3.0.0
         version: 3.0.0
+      flowchart.js:
+        specifier: ^1.18.0
+        version: 1.18.0
       fuzzaldrin:
         specifier: ^2.1.0
         version: 2.1.0
@@ -495,6 +501,9 @@ importers:
       katex:
         specifier: ^0.16.47
         version: 0.16.47
+      mermaid:
+        specifier: ^11.15.0
+        version: 11.15.0
       pako:
         specifier: ^2.1.0
         version: 2.1.0
@@ -519,6 +528,9 @@ importers:
       underscore:
         specifier: ^1.13.8
         version: 1.13.8
+      vega-embed:
+        specifier: ^7.1.0
+        version: 7.1.0(vega-lite@6.4.3(vega@6.2.0))(vega@6.2.0)
       webfontloader:
         specifier: ^1.6.28
         version: 1.6.28
