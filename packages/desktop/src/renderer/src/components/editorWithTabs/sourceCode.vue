@@ -46,10 +46,27 @@ interface SourceHistoryEntry {
   after: SourceHistorySnapshot
 }
 
+interface SourceHeading {
+  line: number
+  level: number
+  content: string
+}
+
 interface MuyaIndexCursorLike {
   anchor: CMCursor
   focus: CMCursor
 }
+
+const SOURCE_FOLD_GUTTER = 'CodeMirror-foldgutter'
+const SOURCE_LINE_GUTTER = 'CodeMirror-linenumbers'
+
+const getSourceFoldOptions = () => ({
+  rangeFinder: codeMirror.fold.markdown,
+  widget: '...',
+  minFoldSize: 0,
+  scanUp: false,
+  clearOnEnter: true
+})
 
 const props = defineProps<{
   markdown?: string
@@ -69,9 +86,45 @@ const suppressCursorActivitySave = ref(false)
 const sourceHistoryUndoStack = ref<SourceHistoryEntry[]>([])
 const sourceHistoryRedoStack = ref<SourceHistoryEntry[]>([])
 const tabId = ref<string | null>(null)
+let sourceHoverLine: number | null = null
 
 const { theme, sourceCode } = storeToRefs(preferencesStore)
 const { currentFile: currentTab } = storeToRefs(editorStore)
+
+const syncFoldGutterColor = () => {
+  const wrapper = editor.value && editor.value.getWrapperElement
+    ? editor.value.getWrapperElement()
+    : null
+  if (!wrapper) return
+
+  const lineNumber = wrapper.querySelector('.CodeMirror-linenumber')
+  if (!lineNumber) return
+
+  const color = window.getComputedStyle(lineNumber).color
+  if (color) {
+    wrapper.style.setProperty('--sourceFoldGutterColor', color)
+  }
+}
+
+const clearSourceHoverLine = () => {
+  if (sourceHoverLine === null || !editor.value) return
+
+  editor.value.removeLineClass(sourceHoverLine, 'wrap', 'CodeMirror-hoverline')
+  editor.value.removeLineClass(sourceHoverLine, 'gutter', 'CodeMirror-hoverline-gutter')
+  sourceHoverLine = null
+}
+
+const setSourceHoverLine = (event: MouseEvent) => {
+  if (!editor.value) return
+
+  const line = editor.value.lineAtHeight(event.clientY, 'window')
+  if (line === sourceHoverLine || typeof editor.value.getLine(line) !== 'string') return
+
+  clearSourceHoverLine()
+  editor.value.addLineClass(line, 'wrap', 'CodeMirror-hoverline')
+  editor.value.addLineClass(line, 'gutter', 'CodeMirror-hoverline-gutter')
+  sourceHoverLine = line
+}
 
 const isValidMuyaIndexCursor = (cursor: unknown): cursor is MuyaIndexCursorLike => {
   const c = cursor as MuyaIndexCursorLike | null | undefined
@@ -86,6 +139,12 @@ watch(
     }
   }
 )
+
+watch(theme, () => {
+  nextTick(() => {
+    requestAnimationFrame(syncFoldGutterColor)
+  })
+})
 
 const getMarkdownAndCursor = (cm: CMInstance) => {
   let focus = cm.getCursor('head')
@@ -224,6 +283,7 @@ const handleSelectAll = () => {
   }
 
   if (editor.value && editor.value.hasFocus()) {
+    unfoldAllSourceHeadings()
     editor.value.execCommand('selectAll')
   } else {
     const activeElement = document.activeElement as HTMLElement | null
@@ -235,6 +295,152 @@ const handleSelectAll = () => {
       }
     }
   }
+}
+
+const clearSourceFolds = (cm: CMInstance) => {
+  const marks = cm.getAllMarks()
+
+  for (const mark of marks) {
+    if (mark.__isFold) {
+      mark.clear()
+    }
+  }
+}
+
+const foldAllSourceHeadings = () => {
+  if (!sourceCode.value || !editor.value) return
+
+  const cm = editor.value
+  cm.operation(() => {
+    clearSourceFolds(cm)
+
+    for (let line = cm.firstLine(); line <= cm.lastLine(); line += 1) {
+      const pos = codeMirror.Pos(line, 0)
+      const range = codeMirror.fold.markdown(cm, pos)
+
+      if (range) {
+        cm.foldCode(pos, getSourceFoldOptions(), 'fold')
+        line = range.to.line
+      }
+    }
+  })
+}
+
+const unfoldAllSourceHeadings = () => {
+  if (!sourceCode.value || !editor.value) return
+
+  const cm = editor.value
+  cm.operation(() => clearSourceFolds(cm))
+}
+
+const unfoldSourceLine = (line: number) => {
+  if (!editor.value) return
+
+  const cm = editor.value
+  cm.operation(() => {
+    const marks = cm.getAllMarks()
+
+    for (const mark of marks) {
+      if (!mark.__isFold) continue
+
+      const range = mark.find()
+      if (range && range.from.line <= line && line <= range.to.line) {
+        mark.clear()
+      }
+    }
+  })
+}
+
+const isHeaderToken = (cm: CMInstance, line: number): boolean => {
+  const tokenType = cm.getTokenTypeAt(codeMirror.Pos(line, 0))
+  return typeof tokenType === 'string' && /\bheader\b/.test(tokenType)
+}
+
+const getSourceHeadingAtLine = (cm: CMInstance, line: number): SourceHeading | null => {
+  const text = cm.getLine(line)
+  if (typeof text !== 'string') return null
+
+  const atxMatch = /^(?: {0,3})(#{1,6})(?:\s+|$)/.exec(text)
+  if (atxMatch && isHeaderToken(cm, line)) {
+    return {
+      line,
+      level: atxMatch[1].length,
+      content: text.replace(/^\s*#{1,6}\s{1,}/, '').trim()
+    }
+  }
+
+  const nextLine = cm.getLine(line + 1)
+  if (
+    text.trim() &&
+    typeof nextLine === 'string' &&
+    /^[=-]+\s*$/.test(nextLine) &&
+    isHeaderToken(cm, line + 1)
+  ) {
+    return {
+      line,
+      level: nextLine[0] === '=' ? 1 : 2,
+      content: text.trim()
+    }
+  }
+
+  return null
+}
+
+const findSourceLineForHeadingSlug = (slug: string): number | null => {
+  if (!editor.value) return null
+
+  const toc = editorStore.listToc
+  const targetIndex = toc.findIndex((item) => item.slug === slug)
+  const target = toc[targetIndex]
+  if (
+    targetIndex < 0 ||
+    !target ||
+    typeof target.content !== 'string' ||
+    typeof target.lvl !== 'number'
+  ) {
+    return null
+  }
+
+  const occurrence = toc.slice(0, targetIndex + 1).filter((item) => {
+    return item.content === target.content && item.lvl === target.lvl
+  }).length
+  let seen = 0
+  const cm = editor.value
+
+  for (let line = cm.firstLine(); line <= cm.lastLine(); line += 1) {
+    const heading = getSourceHeadingAtLine(cm, line)
+
+    if (heading && heading.content === target.content && heading.level === target.lvl) {
+      seen += 1
+      if (seen === occurrence) return heading.line
+    }
+  }
+
+  return null
+}
+
+const scrollToSourceHeader = (slug: unknown) => {
+  if (!sourceCode.value || typeof slug !== 'string' || !editor.value) return
+
+  const line = findSourceLineForHeadingSlug(slug)
+  if (line === null) return
+
+  unfoldSourceLine(line)
+  requestAnimationFrame(() => {
+    if (!editor.value) return
+
+    editor.value.focus()
+    editor.value.setCursor(line, 0)
+    editor.value.scrollIntoView({ line, ch: 0 }, 120)
+  })
+}
+
+const handleFoldAllHeadings = () => {
+  foldAllSourceHeadings()
+}
+
+const handleUnfoldAllHeadings = () => {
+  unfoldAllSourceHeadings()
 }
 
 interface ImageActionPayload {
@@ -376,6 +582,9 @@ const getSourceCodeMirrorConfig = (markdown: string): Record<string, unknown> =>
     lineNumbers: true,
     autofocus: true,
     lineWrapping: true,
+    gutters: [SOURCE_FOLD_GUTTER, SOURCE_LINE_GUTTER],
+    foldGutter: getSourceFoldOptions(),
+    foldOptions: getSourceFoldOptions(),
     styleActiveLine: true,
     direction: props.textDirection,
     viewportMargin: Infinity,
@@ -446,6 +655,12 @@ const createSourceEditor = (
   configureSourceEditor(cm, selection, scrollSelection)
   listenChange(cm)
   editor.value = cm
+
+  const wrapper = cm.getWrapperElement()
+  wrapper.addEventListener('mousemove', setSourceHoverLine)
+  wrapper.addEventListener('mouseleave', clearSourceHoverLine)
+  requestAnimationFrame(syncFoldGutterColor)
+
   return cm
 }
 
@@ -493,6 +708,8 @@ const maybeRestoreSourceHistory = (command: 'undo' | 'redo'): boolean => {
 
 const executeSourceHistoryCommand = (command: 'undo' | 'redo'): void => {
   if (!sourceCode.value || !editor.value) return
+
+  unfoldAllSourceHeadings()
 
   if (maybeRestoreSourceHistory(command)) return
 
@@ -843,6 +1060,9 @@ onMounted(() => {
   bus.on('invalidate-image-cache', handleInvalidateImageCache)
   bus.on('file-changed', handleFileChange)
   bus.on('selectAll', handleSelectAll)
+  bus.on('foldAllHeadings', handleFoldAllHeadings)
+  bus.on('unfoldAllHeadings', handleUnfoldAllHeadings)
+  bus.on('scroll-to-header', scrollToSourceHeader)
   bus.on('image-action', handleImageAction)
   bus.on('source-code::toolbar-command', handleSourceToolbarCommand)
   bus.on('undo', handleSourceUndo)
@@ -866,10 +1086,17 @@ onBeforeUnmount(() => {
   bus.off('invalidate-image-cache', handleInvalidateImageCache)
   bus.off('file-changed', handleFileChange)
   bus.off('selectAll', handleSelectAll)
+  bus.off('foldAllHeadings', handleFoldAllHeadings)
+  bus.off('unfoldAllHeadings', handleUnfoldAllHeadings)
+  bus.off('scroll-to-header', scrollToSourceHeader)
   bus.off('image-action', handleImageAction)
   bus.off('source-code::toolbar-command', handleSourceToolbarCommand)
   bus.off('undo', handleSourceUndo)
   bus.off('redo', handleSourceRedo)
+  const wrapper = editor.value.getWrapperElement()
+  wrapper.removeEventListener('mousemove', setSourceHoverLine)
+  wrapper.removeEventListener('mouseleave', clearSourceHoverLine)
+  clearSourceHoverLine()
 
   const { cursor, markdown: newMarkdown } = getMarkdownAndCursor(editor.value)
   bus.emit('file-changed', {
@@ -892,10 +1119,57 @@ onBeforeUnmount(() => {
   margin: 50px auto;
   max-width: var(--editorAreaWidth);
   background: transparent;
+  --sourceFoldGutterColor: #999;
 }
 .source-code .CodeMirror-gutters {
   border-right: none;
   background-color: transparent;
+}
+.source-code .CodeMirror-foldmarker {
+  color: var(--editorColor);
+  text-shadow: none;
+}
+.source-code .CodeMirror-foldgutter {
+  width: 18px;
+}
+.source-code .CodeMirror-foldgutter-open,
+.source-code .CodeMirror-foldgutter-folded {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 18px;
+  color: var(--sourceFoldGutterColor) !important;
+  line-height: inherit;
+  opacity: 0;
+}
+.source-code .CodeMirror-code > div:hover .CodeMirror-foldgutter-open,
+.source-code .CodeMirror-code > div:hover .CodeMirror-foldgutter-folded,
+.source-code .CodeMirror-hoverline .CodeMirror-foldgutter-open,
+.source-code .CodeMirror-hoverline .CodeMirror-foldgutter-folded,
+.source-code .CodeMirror-hoverline-gutter .CodeMirror-foldgutter-open,
+.source-code .CodeMirror-hoverline-gutter .CodeMirror-foldgutter-folded,
+.source-code .CodeMirror-activeline .CodeMirror-foldgutter-open,
+.source-code .CodeMirror-activeline .CodeMirror-foldgutter-folded,
+.source-code .CodeMirror-activeline-gutter .CodeMirror-foldgutter-open,
+.source-code .CodeMirror-activeline-gutter .CodeMirror-foldgutter-folded,
+.source-code .CodeMirror-foldgutter-folded {
+  opacity: 1;
+}
+.source-code .CodeMirror-foldgutter-open::after,
+.source-code .CodeMirror-foldgutter-folded::after {
+  content: '';
+}
+.source-code .CodeMirror-foldgutter-open::before,
+.source-code .CodeMirror-foldgutter-folded::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  clip-path: polygon(35% 20%, 70% 50%, 35% 80%);
+}
+.source-code .CodeMirror-foldgutter-open::before {
+  clip-path: polygon(20% 35%, 80% 35%, 50% 70%);
 }
 .source-code .CodeMirror-activeline-background,
 .source-code .CodeMirror-activeline-gutter {
