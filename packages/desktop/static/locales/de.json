@@ -417,6 +417,7 @@
         "openFolderInNewWindow": "Ordner über Menü in einem neuen Fenster öffnen",
         "zoom": "Das Zoom-Level. Zwischen 0.5 und 2.0 inklusive",
         "hideScrollbar": "Ob Scrollbalken ausgeblendet werden sollen",
+        "showFormattingToolbar": "Ob die Formatierungsleiste über dem Editor angezeigt werden soll",
         "wordWrapInToc": "Ob Zeilenumbruch im Inhaltsverzeichnis aktiviert werden soll",
         "fileSortBy": "Dateien im geöffneten Ordner nach Erstellungszeit, Änderungszeit und Titel sortieren",
         "startUpAction": "Die Aktion nach MarkText-Start, letzten bearbeiteten Inhalt öffnen, angegebenen Ordner öffnen oder leere Seite",
@@ -504,6 +505,7 @@
         },
         "requiresRestart": "Erfordert Neustart",
         "hideScrollbars": "Bildlaufleisten ausblenden",
+        "showFormattingToolbar": "Formatierungsleiste anzeigen",
         "openFilesInNewWindow": "Dateien in neuem Fenster öffnen",
         "openFoldersInNewWindow": "Ordner in neuem Fenster öffnen",
         "zoom": "Zoom"
@@ -1397,5 +1399,8 @@
     "copy": "Kopieren",
     "paste": "Einfügen",
     "selectAll": "Alles auswählen"
+  },
+  "toolbar": {
+    "list": "Liste"
   }
 }
