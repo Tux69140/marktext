@@ -7,13 +7,16 @@
       {{ t('sideBar.toc.title') }}
     </div>
     <el-tree
-      v-if="toc.length"
-      :data="toc"
+      v-if="tocData.length"
+      :data="tocData"
       :default-expand-all="true"
       :props="defaultProps"
       :expand-on-click-node="false"
       :indent="10"
       :icon="ArrowRight"
+      node-key="slug"
+      :current-node-key="activeHeadingSlug"
+      :highlight-current="true"
       @node-click="handleClick"
     />
   </div>
@@ -26,6 +29,7 @@ import bus from '../../bus'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { ArrowRight } from '@element-plus/icons-vue'
+import { computed } from 'vue'
 
 const { t } = useI18n()
 
@@ -37,8 +41,20 @@ const defaultProps = {
   label: 'label'
 }
 
-const { toc } = storeToRefs(editorStore)
+const { toc, activeHeadingSlug } = storeToRefs(editorStore)
 const { wordWrapInToc } = storeToRefs(preferencesStore)
+
+// Strip circular `parent` references so el-tree node-key matching works correctly
+type PlainNode = { slug: string; label: unknown; lvl: unknown; children: PlainNode[] }
+function stripParent(nodes: typeof toc.value): PlainNode[] {
+  return nodes.map(({ slug, label, lvl, children }) => ({
+    slug: slug as string,
+    label,
+    lvl,
+    children: stripParent(children)
+  }))
+}
+const tocData = computed(() => stripParent(toc.value))
 
 const handleClick = (data: { slug?: unknown }): void => {
   // editor.vue builds a CSS selector with `#${slug}` — bail out if the
@@ -74,6 +90,7 @@ const handleClick = (data: { slug?: unknown }): void => {
 .side-bar-toc .el-tree {
   background: transparent;
   color: var(--sideBarColor);
+  --el-color-primary: var(--themeColor);
 }
 
 .side-bar-toc .el-tree-node:focus > .el-tree-node__content {
@@ -82,6 +99,21 @@ const handleClick = (data: { slug?: unknown }): void => {
 
 .side-bar-toc .el-tree-node__content:hover {
   background: var(--sideBarItemHoverBgColor);
+}
+
+.side-bar-toc .el-tree-node__label {
+  background-color: transparent;
+}
+
+.side-bar-toc .el-tree--highlight-current .el-tree-node.is-current > .el-tree-node__content {
+  background: color-mix(in srgb, var(--themeColor) 15%, transparent);
+  font-weight: 600;
+  --el-tree-text-color: var(--themeColor);
+}
+
+.side-bar-toc .el-tree--highlight-current .el-tree-node.is-current > .el-tree-node__content .el-tree-node__label {
+  background-color: transparent;
+  color: var(--themeColor);
 }
 
 .side-bar-toc > li {

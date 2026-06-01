@@ -1412,6 +1412,21 @@ onMounted(() => {
   })
 
   editor.value.on('selectionChange', (changes: MuyaChange) => {
+    // Update active TOC heading based on cursor position
+    const slugs = editorStore.listToc.map((item) => item.slug as string).filter(Boolean)
+    if (slugs.length > 0) {
+      const { y: cursorY } = changes.cursorCoords as { y: number }
+      const cursorTop = container.scrollTop + cursorY
+      let activeSlug = slugs[0]!
+      for (const slug of slugs) {
+        const el = container.querySelector(`#${slug}`)
+        if (el && (el as HTMLElement).offsetTop <= cursorTop) {
+          activeSlug = slug
+        }
+      }
+      editorStore.SET_ACTIVE_HEADING(activeSlug)
+    }
+
     const { y } = changes.cursorCoords as { y: number }
     if (typewriter.value) {
       const startPosition = container.scrollTop

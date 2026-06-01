@@ -131,6 +131,7 @@ export interface EditorState {
   toc: TocTreeNode[]
   selectionMenuState: ApplicationMenuState
   selectionFormatState: Record<string, boolean>
+  activeHeadingSlug: string
 }
 
 const autoSaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -152,7 +153,8 @@ export const useEditorStore = defineStore('editor', {
       isTable: false,
       affiliation: {}
     },
-    selectionFormatState: {}
+    selectionFormatState: {},
+    activeHeadingSlug: ''
   }),
 
   actions: {
@@ -259,6 +261,10 @@ export const useEditorStore = defineStore('editor', {
         tab.scrollTop = scrollTop
       }
       debouncedSendBufferedState()
+    },
+
+    SET_ACTIVE_HEADING(slug: string): void {
+      this.activeHeadingSlug = slug
     },
 
     /**
