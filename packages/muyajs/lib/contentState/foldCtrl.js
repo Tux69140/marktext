@@ -44,7 +44,7 @@ const foldCtrl = (ContentState) => {
   }
 
   ContentState.prototype.getFoldHeadingForBlock = function(block) {
-    if (!block) return null
+    if (!block || this.foldedHeadings.size === 0) return null
 
     const outmostBlock = block.parent ? this.findOutMostBlock(block) : block
     let heading = this.getBlock(outmostBlock.preSibling)
@@ -61,7 +61,7 @@ const foldCtrl = (ContentState) => {
   }
 
   ContentState.prototype.isBlockHiddenByFold = function(block) {
-    if (!block) return false
+    if (!block || this.foldedHeadings.size === 0) return false
 
     const outmostBlock = block.parent ? this.findOutMostBlock(block) : block
     return outmostBlock === block && !!this.getFoldHeadingForBlock(outmostBlock)
@@ -86,6 +86,8 @@ const foldCtrl = (ContentState) => {
   }
 
   ContentState.prototype.ensureCursorVisible = function() {
+    if (this.foldedHeadings.size === 0) return
+
     const { start, end } = this.cursor
     const startBlock = this.getBlock(start ? start.key : null)
     const endBlock = this.getBlock(end ? end.key : null)

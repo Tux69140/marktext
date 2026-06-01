@@ -48,4 +48,22 @@ test.describe('Editor input and source-mode roundtrip', () => {
     const markdown = await getMarkdownContent(page, app)
     expect(markdown).toContain('typed-token')
   })
+
+  test('Typing after a real WYSIWYG click updates content', async() => {
+    await page.locator('.editor-component span.ag-paragraph', { hasText: 'Starting paragraph.' }).click()
+    await page.keyboard.type(' clicked-token', { delay: 5 })
+    await page.waitForTimeout(400)
+    const markdown = await getMarkdownContent(page, app)
+    expect(markdown).toContain('clicked-token')
+  })
+
+  test('Backspace after a real WYSIWYG click updates content', async() => {
+    await page.locator('.editor-component span.ag-paragraph', { hasText: 'Starting paragraph.' }).click()
+    await page.keyboard.type(' delete-me-z', { delay: 5 })
+    await page.keyboard.press('Backspace')
+    await page.waitForTimeout(400)
+    const markdown = await getMarkdownContent(page, app)
+    expect(markdown).toContain('delete-me-')
+    expect(markdown).not.toContain('delete-me-z')
+  })
 })

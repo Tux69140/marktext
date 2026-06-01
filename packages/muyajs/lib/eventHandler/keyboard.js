@@ -220,6 +220,9 @@ class Keyboard {
     }
     const historyInputHandler = (event) => {
       if (!isHistoryInput(event)) {
+        if (!this.isComposed && contentState.beforeInputHandler(event)) {
+          return
+        }
         return
       }
 

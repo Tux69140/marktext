@@ -94,6 +94,94 @@ const inputCtrl = (ContentState) => {
     return false
   }
 
+  ContentState.prototype.beforeInputHandler = function(event) {
+    const inputType = typeof event.inputType === 'string' ? event.inputType.toLowerCase() : ''
+    const isInsertText = inputType === 'inserttext' && typeof event.data === 'string'
+    const isDeleteBackward = inputType === 'deletecontentbackward'
+    const isDeleteForward = inputType === 'deletecontentforward'
+    if (!isInsertText && !isDeleteBackward && !isDeleteForward) {
+      return false
+    }
+
+    const { start, end } = selection.getCursorRange()
+    if (!start || !end) {
+      return false
+    }
+
+    const startBlock = this.getBlock(start.key)
+    const endBlock = this.getBlock(end.key)
+    if (
+      !startBlock ||
+      !endBlock ||
+      start.key !== end.key ||
+      typeof startBlock.text !== 'string' ||
+      !/atxLine|paragraphContent|cellContent|codeContent|languageInput/.test(startBlock.functionType)
+    ) {
+      return false
+    }
+
+    const isCollapsed = start.offset === end.offset
+    if (
+      isDeleteBackward &&
+      ((isCollapsed && start.offset === 0) || (!isCollapsed && start.offset === end.offset))
+    ) {
+      return false
+    }
+    if (
+      isDeleteForward &&
+      ((isCollapsed && start.offset === startBlock.text.length) ||
+        (!isCollapsed && start.offset === end.offset))
+    ) {
+      return false
+    }
+
+    event.preventDefault()
+
+    const oldText = startBlock.text
+    let text = oldText
+    let offset = start.offset
+    if (isInsertText) {
+      text = oldText.substring(0, start.offset) + event.data + oldText.substring(end.offset)
+      offset = start.offset + event.data.length
+    } else if (isDeleteBackward) {
+      const removeStart = isCollapsed ? start.offset - 1 : start.offset
+      text = oldText.substring(0, removeStart) + oldText.substring(end.offset)
+      offset = removeStart
+    } else if (isDeleteForward) {
+      const removeEnd = isCollapsed ? end.offset + 1 : end.offset
+      text = oldText.substring(0, start.offset) + oldText.substring(removeEnd)
+    }
+    const cursor = {
+      start: { key: start.key, offset },
+      end: { key: start.key, offset },
+      isEdit: true
+    }
+
+    startBlock.text = text
+    this.cursor = cursor
+
+    if (startBlock.functionType === 'languageInput') {
+      const parent = this.getParent(startBlock)
+      parent.lang = startBlock.text
+    }
+
+    const shouldRender =
+      this.checkNotSameToken(startBlock.functionType, oldText, text) ||
+      this.checkNeedRender(cursor) ||
+      (this.isCollapse(cursor) && this.checkInlineUpdate(startBlock))
+
+    if (shouldRender || startBlock.functionType === 'codeContent') {
+      this.partialRender()
+    } else {
+      this.singleRender(startBlock)
+    }
+
+    this.muya.dispatchSelectionChange()
+    this.muya.dispatchSelectionFormats()
+    this.muya.dispatchChange()
+    return true
+  }
+
   ContentState.prototype.inputHandler = function(event, notEqual = false) {
     const inputType = typeof event.inputType === 'string' ? event.inputType.toLowerCase() : ''
     if (/historyundo|historyredo/.test(inputType)) {
