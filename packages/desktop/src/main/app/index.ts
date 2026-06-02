@@ -19,6 +19,8 @@ import { WindowType } from '../windows/base'
 import EditorWindow from '../windows/editor'
 import SettingWindow from '../windows/setting'
 import { setLanguage } from '../i18n'
+import type { BufferedState } from '@shared/types/bufferedState'
+import type { IFileState } from '@shared/types/files'
 import { getNativeThemeSource, isDarkApplicationTheme } from './nativeTheme'
 import type Accessor from './accessor'
 
@@ -223,6 +225,8 @@ class App {
     const { _args: args, _openFilesCache } = this
     const { preferences, editorBufferStore } = this._accessor
 
+    let hasExplicitOpenRequest = false
+
     // Initialize language settings
     const {
       startUpAction,
@@ -249,6 +253,7 @@ class App {
         const info = normalizeMarkdownPath(pathname)
         if (info) {
           _openFilesCache.push(info as PathInfo)
+          hasExplicitOpenRequest = true
         }
       }
     }
@@ -381,7 +386,6 @@ class App {
 
     const createWindow = (): void => {
       if (isRestorePathway) {
-        // We will restore based off the previous buffer, one window per buffer store file
         const bufferStores = editorBufferStore.getAll()
         const bufferStoreList = Object.values(bufferStores) as Array<{
           id: string
@@ -392,13 +396,25 @@ class App {
           return
         }
 
-        bufferStoreList.forEach((bufferStoreInfo) => {
-          // Read the buffer store file and pass the content
-          this._createEditorWindow(null, [], [], {}, bufferStoreInfo)
-        })
+        const mergedBufferState = this.mergeAllBufferStates(bufferStoreList)
+        if (!mergedBufferState) {
+          this._createEditorWindow()
+          return
+        }
+
+        const primaryBufferInfo = bufferStoreList.find((info) => info.filePath) ?? null
+        if (!primaryBufferInfo) {
+          this._createEditorWindow()
+          return
+        }
+
+        editorBufferStore.writeBufferStoreFile(primaryBufferInfo.filePath, mergedBufferState)
+        this._createEditorWindow(null, [], [], {}, primaryBufferInfo)
       } else if (_openFilesCache.length) {
         // We should wipe the buffer store if not it will keep creating new windows whenever we open files via double click in the file manager
-        editorBufferStore.clearBufferStoresWithAllSaved()
+        if (hasExplicitOpenRequest) {
+          editorBufferStore.clearBufferStoresWithAllSaved()
+        }
         this._openFilesToOpen()
       } else {
         this._createEditorWindow()
@@ -503,6 +519,107 @@ class App {
 
   private _openFilesToOpen(): void {
     this._openPathList(this._openFilesCache, false)
+  }
+
+  /**
+   * Merge the persisted state from all buffer stores into a single buffer payload.
+   *
+   * The current editor design restores one window per buffer file. That can create
+   * one application window per document in practical usage. We merge all editor
+   * states to keep the "restore all" behavior as a single logical editor session.
+   */
+  private mergeAllBufferStates(
+    bufferStoreList: Array<{ id: string; filePath: string | null }>
+  ): BufferedState | null {
+    const { editorBufferStore } = this._accessor
+    if (!Array.isArray(bufferStoreList) || bufferStoreList.length === 0) {
+      return null
+    }
+
+    const mergedTabs: IFileState[] = []
+    const mergedWarnings: unknown[] = []
+    const seenPaths = new Set<string>()
+    const seenTabIds = new Set<string>()
+    let mergedCurrentFileId: string | undefined
+    let primaryState: BufferedState | null = null
+
+    for (const info of bufferStoreList) {
+      if (!info.filePath) continue
+
+      let bufferedState: unknown
+      try {
+        bufferedState = editorBufferStore.readBufferStoreFile(info.filePath)
+      } catch (err) {
+        console.error(`Failed to read buffer state during restore merge: ${info.id}`, err)
+        continue
+      }
+      if (!bufferedState || typeof bufferedState !== 'object') continue
+
+      const normalized = bufferedState as Record<string, unknown>
+      const editorState = normalized.editor as unknown
+      if (!editorState || typeof editorState !== 'object') continue
+
+      const { tabs = [], restoreWarnings = [] } = editorState as {
+        tabs?: unknown
+        currentFileId?: string | null
+        currentFile?: { id?: string } | null
+        restoreWarnings?: unknown
+      }
+      if (!Array.isArray(tabs)) continue
+
+      if (!primaryState) {
+        primaryState = normalized as BufferedState
+      }
+
+      const currentFileId = (editorState as { currentFileId?: string | null; currentFile?: { id?: string } })
+        .currentFileId
+        ?? (editorState as { currentFile?: { id?: string } }).currentFile?.id
+        ?? null
+
+      for (const tab of tabs) {
+        if (!tab || typeof tab !== 'object') continue
+        const typedTab = tab as IFileState
+        const { pathname } = typedTab
+
+        if (pathname && seenPaths.has(pathname)) {
+          continue
+        }
+        if (typedTab.id && seenTabIds.has(typedTab.id)) {
+          continue
+        }
+
+        mergedTabs.push(typedTab)
+        if (typedTab.id) seenTabIds.add(typedTab.id)
+        if (pathname) seenPaths.add(pathname)
+        if (!mergedCurrentFileId && currentFileId && currentFileId === typedTab.id) {
+          mergedCurrentFileId = currentFileId
+        }
+      }
+
+      if (Array.isArray(restoreWarnings)) {
+        mergedWarnings.push(...restoreWarnings)
+      }
+    }
+
+    if (!primaryState || mergedTabs.length === 0) {
+      return null
+    }
+
+    const mergedEditorState: Record<string, unknown> & { tabs: IFileState[]; restoreWarnings?: unknown[] } = {
+      ...(primaryState.editor as Record<string, unknown>),
+      tabs: mergedTabs,
+      restoreWarnings: mergedWarnings
+    }
+    if (mergedCurrentFileId) {
+      mergedEditorState.currentFileId = mergedCurrentFileId
+    } else {
+      delete mergedEditorState.currentFileId
+    }
+
+    return {
+      ...primaryState,
+      editor: mergedEditorState
+    } as BufferedState
   }
 
   /**

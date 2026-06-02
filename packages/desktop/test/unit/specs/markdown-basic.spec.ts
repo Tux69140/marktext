@@ -21,6 +21,11 @@ interface MuyaCtx {
   contentState: any
 }
 
+interface TestBlock {
+  type: string
+  key: string
+}
+
 const createMuyaContext = (options: MuyaOptions): MuyaCtx => {
   const ctx = {} as MuyaCtx
   ctx.options = Object.assign({}, MUYA_DEFAULT_OPTION, options)
@@ -114,5 +119,29 @@ describe('Muya parser (CRLF)', () => {
   })
   it('GFM - Tables', () => {
     verifyMarkdown(templates.GfmTablesTemplate(), defaultOptionsCrlf)
+  })
+})
+
+describe('Muya heading fold refs', () => {
+  it('restores folded headings after reparsing with new block keys', () => {
+    const markdown = '# Intro\n\nBody.\n\n## Repeat\n\nFirst.\n\n## Repeat\n\nSecond.\n'
+    const ctx = createMuyaContext(defaultOptions)
+    ctx.contentState.importMarkdown(markdown)
+
+    const headings = (ctx.contentState.getBlocks() as TestBlock[])
+      .filter((block) => block.type === 'h2')
+    ctx.contentState.foldedHeadings.add(headings[1].key)
+
+    const refs = ctx.contentState.getFoldedHeadingRefs()
+    expect(refs).toEqual([{ lvl: 2, content: 'Repeat', occurrence: 2 }])
+
+    const restoredCtx = createMuyaContext(defaultOptions)
+    restoredCtx.contentState.importMarkdown(markdown)
+    restoredCtx.contentState.setFoldedHeadingRefs(refs)
+
+    const restoredHeadings = (restoredCtx.contentState.getBlocks() as TestBlock[])
+      .filter((block) => block.type === 'h2')
+    expect(restoredCtx.contentState.isHeadingFolded(restoredHeadings[0])).toBe(false)
+    expect(restoredCtx.contentState.isHeadingFolded(restoredHeadings[1])).toBe(true)
   })
 })

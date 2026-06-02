@@ -129,8 +129,19 @@ class Muya {
     const muyaIndexCursor = this.contentState.getMuyaIndexCursor()
     const history = this.getHistory()
     const toc = this.getTOC()
+    const foldedHeadingKeys = this.getFoldedHeadingKeys()
+    const foldedHeadingRefs = this.getFoldedHeadingRefs()
 
-    eventCenter.dispatch('change', { markdown, wordCount, cursor, muyaIndexCursor, history, toc })
+    eventCenter.dispatch('change', {
+      markdown,
+      wordCount,
+      cursor,
+      muyaIndexCursor,
+      history,
+      toc,
+      foldedHeadingKeys,
+      foldedHeadingRefs
+    })
   }
 
   dispatchSelectionChange = (cursor) => {
@@ -192,11 +203,19 @@ class Muya {
     return Array.from(this.contentState.foldedHeadings)
   }
 
+  getFoldedHeadingRefs() {
+    return this.contentState.getFoldedHeadingRefs()
+  }
+
   setFoldedHeadingKeys(keys = []) {
     this.contentState.clearHeadingFolds()
     for (const key of keys) {
       this.contentState.foldedHeadings.add(key)
     }
+  }
+
+  setFoldedHeadingRefs(refs = []) {
+    this.contentState.setFoldedHeadingRefs(refs)
   }
 
   setMarkdown(
@@ -205,7 +224,8 @@ class Muya {
     isRenderCursor = true,
     muyaIndexCursor = undefined,
     blocks = undefined,
-    foldedHeadingKeys = undefined
+    foldedHeadingKeys = undefined,
+    foldedHeadingRefs = undefined
   ) {
     let finalCursor = null
     this.contentState.clearHeadingFolds()
@@ -234,7 +254,11 @@ class Muya {
       this.contentState.importMarkdown(markdown)
     }
 
-    if (Array.isArray(foldedHeadingKeys) && foldedHeadingKeys.length > 0) {
+    if (blocks && Array.isArray(foldedHeadingKeys) && foldedHeadingKeys.length > 0) {
+      this.setFoldedHeadingKeys(foldedHeadingKeys)
+    } else if (Array.isArray(foldedHeadingRefs) && foldedHeadingRefs.length > 0) {
+      this.setFoldedHeadingRefs(foldedHeadingRefs)
+    } else if (Array.isArray(foldedHeadingKeys) && foldedHeadingKeys.length > 0) {
       this.setFoldedHeadingKeys(foldedHeadingKeys)
     }
 

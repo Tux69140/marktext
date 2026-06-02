@@ -106,6 +106,7 @@ interface ContentChangePayload {
   toc?: TocItem[]
   blocks?: unknown
   foldedHeadingKeys?: string[]
+  foldedHeadingRefs?: IFileState['foldedHeadingRefs']
   sourceFoldedLines?: number[]
 }
 
@@ -398,7 +399,16 @@ export const useEditorStore = defineStore('editor', {
       if (currentFile && pathname === currentFile.pathname) {
         // save current state first
         this.currentFile = tab
-        const { id, cursor, history, scrollTop, muyaIndexCursor, foldedHeadingKeys, sourceFoldedLines } = tab // Should not use blocks history as this is loaded from disk
+        const {
+          id,
+          cursor,
+          history,
+          scrollTop,
+          muyaIndexCursor,
+          foldedHeadingKeys,
+          foldedHeadingRefs,
+          sourceFoldedLines
+        } = tab // Should not use blocks history as this is loaded from disk
         bus.emit('file-changed', {
           id,
           markdown,
@@ -408,6 +418,7 @@ export const useEditorStore = defineStore('editor', {
           history,
           scrollTop,
           foldedHeadingKeys,
+          foldedHeadingRefs,
           sourceFoldedLines
         })
       }
@@ -852,6 +863,7 @@ export const useEditorStore = defineStore('editor', {
           blocks,
           muyaIndexCursor,
           foldedHeadingKeys,
+          foldedHeadingRefs,
           sourceFoldedLines
         } = currentFile
         window.DIRNAME = pathname ? window.path.dirname(pathname) : ''
@@ -873,6 +885,7 @@ export const useEditorStore = defineStore('editor', {
           scrollTop,
           blocks: blocks ? asRawBlocks(blocks) : blocks,
           foldedHeadingKeys,
+          foldedHeadingRefs,
           sourceFoldedLines
         })
       }
@@ -1053,6 +1066,7 @@ export const useEditorStore = defineStore('editor', {
             blocks,
             muyaIndexCursor,
             foldedHeadingKeys,
+            foldedHeadingRefs,
             sourceFoldedLines
           } = fileState
           window.DIRNAME = pathname ? window.path.dirname(pathname) : ''
@@ -1066,6 +1080,7 @@ export const useEditorStore = defineStore('editor', {
             scrollTop,
             blocks: blocks ? asRawBlocks(blocks) : blocks,
             foldedHeadingKeys,
+            foldedHeadingRefs,
             sourceFoldedLines
           })
         } else {
@@ -1156,6 +1171,7 @@ export const useEditorStore = defineStore('editor', {
             blocks,
             muyaIndexCursor,
             foldedHeadingKeys,
+            foldedHeadingRefs,
             sourceFoldedLines
           } = this.currentFile
           window.DIRNAME = pathname ? window.path.dirname(pathname) : ''
@@ -1169,6 +1185,7 @@ export const useEditorStore = defineStore('editor', {
             scrollTop,
             blocks: blocks ? asRawBlocks(blocks) : blocks,
             foldedHeadingKeys,
+            foldedHeadingRefs,
             sourceFoldedLines
           })
         }
@@ -1428,6 +1445,7 @@ export const useEditorStore = defineStore('editor', {
       toc,
       blocks,
       foldedHeadingKeys,
+      foldedHeadingRefs,
       sourceFoldedLines
     }: ContentChangePayload): void {
       const preferencesStore = usePreferencesStore()
@@ -1461,6 +1479,7 @@ export const useEditorStore = defineStore('editor', {
       if (history) tab.history = history
       if (blocks) tab.blocks = asRawBlocks(blocks)
       if (Array.isArray(foldedHeadingKeys)) tab.foldedHeadingKeys = foldedHeadingKeys
+      if (Array.isArray(foldedHeadingRefs)) tab.foldedHeadingRefs = foldedHeadingRefs
       if (Array.isArray(sourceFoldedLines)) tab.sourceFoldedLines = sourceFoldedLines
 
       // Only update TOC if it's the current file
@@ -2022,6 +2041,7 @@ interface BufferedTabState {
   muyaIndexCursor: unknown
   scrollTop: number
   foldedHeadingKeys?: string[]
+  foldedHeadingRefs?: IFileState['foldedHeadingRefs']
   sourceFoldedLines?: number[]
   expandedTocKeys?: string[]
 }
@@ -2045,6 +2065,9 @@ const createBufferedTabState = (tab: Partial<IFileState> & { id: string }): Buff
     muyaIndexCursor: toSerializableValue(tab.muyaIndexCursor, defaultFileState.muyaIndexCursor),
     scrollTop: tab.scrollTop ?? defaultFileState.scrollTop,
     foldedHeadingKeys: Array.isArray(tab.foldedHeadingKeys) ? [...tab.foldedHeadingKeys] : undefined,
+    foldedHeadingRefs: Array.isArray(tab.foldedHeadingRefs)
+      ? toSerializableValue(tab.foldedHeadingRefs, [])
+      : undefined,
     sourceFoldedLines: Array.isArray(tab.sourceFoldedLines) ? [...tab.sourceFoldedLines] : undefined,
     expandedTocKeys: Array.isArray(tab.expandedTocKeys) ? [...tab.expandedTocKeys] : undefined
   }

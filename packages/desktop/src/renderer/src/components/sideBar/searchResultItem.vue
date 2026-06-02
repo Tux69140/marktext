@@ -154,6 +154,8 @@ const handleSearchResultClick = (searchMatch: SearchMatch): void => {
         cursor: currentFile.value.cursor,
         renderCursor: true,
         history,
+        foldedHeadingKeys: currentFile.value.foldedHeadingKeys,
+        foldedHeadingRefs: currentFile.value.foldedHeadingRefs,
         sourceFoldedLines: currentFile.value.sourceFoldedLines
       })
     }

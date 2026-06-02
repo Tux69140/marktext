@@ -16,6 +16,33 @@ const getFirstTextBlock = (block) => {
   return null
 }
 
+const getHeadingContent = (block) => {
+  const textBlock = getFirstTextBlock(block && block.children ? block.children[0] : block)
+  if (!textBlock || typeof textBlock.text !== 'string') return ''
+
+  return block.headingStyle === 'setext'
+    ? textBlock.text.trim()
+    : textBlock.text.replace(/^\s*#{1,6}\s{1,}/, '').trim()
+}
+
+const getHeadingRefKey = (level, content) => `${level}\u0000${content}`
+
+const getHeadingRefLevel = (ref) => {
+  const level = Number(ref && (ref.lvl ?? ref.level))
+  return level >= 1 && level <= 6 ? level : null
+}
+
+const getHeadingRefContent = (ref) => {
+  if (!ref) return null
+  if (typeof ref.content === 'string') return ref.content
+  if (typeof ref.text === 'string') return ref.text
+  return null
+}
+
+const dispatchFoldStateChange = (contentState) => {
+  contentState.muya.eventCenter.dispatch('stateChange')
+}
+
 const foldCtrl = (ContentState) => {
   ContentState.prototype.isHeadingBlock = function(block) {
     return !!block && HEADING_REG.test(block.type)
@@ -54,6 +81,64 @@ const foldCtrl = (ContentState) => {
     }
 
     this.foldHiddenBlocks = hiddenBlocks
+  }
+
+  ContentState.prototype.getFoldedHeadingRefs = function() {
+    const refs = []
+    const seen = new Map()
+
+    for (const block of this.blocks) {
+      const level = getHeadingLevel(block)
+      if (level < 1) continue
+
+      const content = getHeadingContent(block)
+      const refKey = getHeadingRefKey(level, content)
+      const occurrence = (seen.get(refKey) || 0) + 1
+      seen.set(refKey, occurrence)
+
+      if (this.isHeadingFolded(block)) {
+        refs.push({ lvl: level, content, occurrence })
+      }
+    }
+
+    return refs
+  }
+
+  ContentState.prototype.setFoldedHeadingRefs = function(refs = []) {
+    this.clearHeadingFolds()
+    if (!Array.isArray(refs) || refs.length === 0) return
+
+    const wanted = new Map()
+    for (const ref of refs) {
+      const level = getHeadingRefLevel(ref)
+      const content = getHeadingRefContent(ref)
+      const occurrence = Number(ref && ref.occurrence)
+
+      if (!level || content === null || !Number.isInteger(occurrence) || occurrence < 1) continue
+
+      const refKey = getHeadingRefKey(level, content)
+      if (!wanted.has(refKey)) {
+        wanted.set(refKey, new Set())
+      }
+      wanted.get(refKey).add(occurrence)
+    }
+
+    const seen = new Map()
+    for (const block of this.blocks) {
+      const level = getHeadingLevel(block)
+      if (level < 1) continue
+
+      const content = getHeadingContent(block)
+      const refKey = getHeadingRefKey(level, content)
+      const occurrence = (seen.get(refKey) || 0) + 1
+      seen.set(refKey, occurrence)
+
+      if (wanted.get(refKey)?.has(occurrence)) {
+        this.foldedHeadings.add(block.key)
+      }
+    }
+
+    this.refreshFoldHiddenBlocks()
   }
 
   ContentState.prototype.getSectionBlocks = function(heading) {
@@ -160,6 +245,7 @@ const foldCtrl = (ContentState) => {
 
     if (didUnfold) {
       this.render(false)
+      dispatchFoldStateChange(this)
     }
 
     return didUnfold
@@ -177,6 +263,7 @@ const foldCtrl = (ContentState) => {
     }
 
     this.render()
+    dispatchFoldStateChange(this)
   }
 
   ContentState.prototype.foldAllHeadings = function() {
@@ -189,12 +276,14 @@ const foldCtrl = (ContentState) => {
     this.refreshFoldHiddenBlocks()
     this.ensureCursorVisible()
     this.render()
+    dispatchFoldStateChange(this)
   }
 
   ContentState.prototype.unfoldAllHeadings = function() {
     this.foldedHeadings.clear()
     this.refreshFoldHiddenBlocks()
     this.render()
+    dispatchFoldStateChange(this)
   }
 
   ContentState.prototype.clearHeadingFolds = function() {

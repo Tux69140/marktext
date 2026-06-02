@@ -159,6 +159,7 @@ import { useEditorStore } from '@/store/editor'
 import { useProjectStore } from '@/store/project'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
+import type { IFileState } from '@shared/types/files'
 
 import 'muya/themes/default.css'
 import '@/assets/themes/codemirror/one-dark.css'
@@ -1165,6 +1166,7 @@ interface FileChangePayload {
   muyaIndexCursor?: unknown
   blocks?: unknown
   foldedHeadingKeys?: string[]
+  foldedHeadingRefs?: IFileState['foldedHeadingRefs']
 }
 
 const currentTabId = ref<string | null>(null)
@@ -1179,7 +1181,8 @@ const prepareTabSwitch = () => {
     history: editor.value.getHistory(),
     toc: editor.value.getTOC(),
     blocks: editor.value.contentState.getBlocks(),
-    foldedHeadingKeys: editor.value.getFoldedHeadingKeys()
+    foldedHeadingKeys: editor.value.getFoldedHeadingKeys(),
+    foldedHeadingRefs: editor.value.getFoldedHeadingRefs()
   })
 }
 
@@ -1193,7 +1196,8 @@ const handleFileChange = (payload: unknown) => {
     scrollTop,
     muyaIndexCursor,
     blocks = undefined,
-    foldedHeadingKeys = undefined
+    foldedHeadingKeys = undefined,
+    foldedHeadingRefs = undefined
   } = (payload ?? {}) as FileChangePayload
   if (!editor.value) return
 
@@ -1218,7 +1222,8 @@ const handleFileChange = (payload: unknown) => {
       renderCursor,
       muyaIndexCursor,
       blocks,
-      foldedHeadingKeys
+      foldedHeadingKeys,
+      foldedHeadingRefs
     )
   } else if (newCursor) {
     editor.value.setCursor(newCursor)

@@ -84,6 +84,7 @@ const documentStateKeys = [
   'scrollTop',
   'muyaIndexCursor',
   'foldedHeadingKeys',
+  'foldedHeadingRefs',
   'sourceFoldedLines',
   'expandedTocKeys',
   'notifications'

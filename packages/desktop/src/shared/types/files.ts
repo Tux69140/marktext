@@ -59,6 +59,12 @@ export interface FileSearchMatches {
   value: string
 }
 
+export interface FoldedHeadingRef {
+  lvl: number
+  content: string
+  occurrence: number
+}
+
 /**
  * Per-tab editor state — the canonical document state shape shared between
  * the renderer Pinia store, the buffered-state persistence layer, and
@@ -88,6 +94,7 @@ export interface IFileState {
   // Muya block tree; only populated for the actively edited tab.
   blocks?: unknown
   foldedHeadingKeys?: string[]
+  foldedHeadingRefs?: FoldedHeadingRef[]
   sourceFoldedLines?: number[]
   expandedTocKeys?: string[]
   isMixedLineEndings?: boolean
