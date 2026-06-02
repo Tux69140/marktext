@@ -83,6 +83,9 @@ const documentStateKeys = [
   'searchMatches',
   'scrollTop',
   'muyaIndexCursor',
+  'foldedHeadingKeys',
+  'sourceFoldedLines',
+  'expandedTocKeys',
   'notifications'
 ] as const satisfies ReadonlyArray<keyof IFileState>
 

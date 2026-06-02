@@ -7,16 +7,20 @@
     </div>
     <el-tree
       v-if="tocData.length"
+      :key="currentFile?.id || 'toc'"
       ref="tocTreeRef"
       :class="[{ 'side-bar-toc-overflow': !wordWrapInToc, 'side-bar-toc-wordwrap': wordWrapInToc }]"
       :data="tocData"
-      :default-expand-all="true"
+      :default-expanded-keys="initialExpandedTocKeys"
       :props="defaultProps"
       :expand-on-click-node="false"
+      :auto-expand-parent="false"
       :indent="10"
       :icon="ArrowRight"
       node-key="slug"
       :highlight-current="true"
+      @node-collapse="updateExpandedKeys"
+      @node-expand="updateExpandedKeys"
       @node-click="handleClick"
     />
   </div>
@@ -38,14 +42,32 @@ const editorStore = useEditorStore()
 const preferencesStore = usePreferencesStore()
 
 const tocTreeRef = ref<InstanceType<typeof ElTree> | null>(null)
+const initialExpandedTocKeys = ref<string[]>([])
 
 const defaultProps = {
   children: 'children',
   label: 'label'
 }
 
-const { toc, activeHeadingSlug } = storeToRefs(editorStore)
+const { toc, activeHeadingSlug, currentFile } = storeToRefs(editorStore)
 const { wordWrapInToc } = storeToRefs(preferencesStore)
+const getDefaultExpandedTocKeys = () => {
+  if (Array.isArray(currentFile.value?.expandedTocKeys)) {
+    return currentFile.value.expandedTocKeys
+  }
+
+  const keys: string[] = []
+  const visit = (nodes: PlainNode[]) => {
+    for (const node of nodes) {
+      keys.push(node.slug)
+      if (node.children.length > 0) {
+        visit(node.children)
+      }
+    }
+  }
+  visit(tocData.value)
+  return keys
+}
 
 // Strip circular `parent` references so el-tree node-key matching works correctly
 type PlainNode = { slug: string; label: unknown; lvl: unknown; children: PlainNode[] }
@@ -58,6 +80,7 @@ function stripParent(nodes: typeof toc.value): PlainNode[] {
   }))
 }
 const tocData = computed(() => stripParent(toc.value))
+initialExpandedTocKeys.value = getDefaultExpandedTocKeys()
 
 function applyCurrentKey() {
   nextTick(() => {
@@ -66,9 +89,44 @@ function applyCurrentKey() {
   })
 }
 
+function collectExpandedKeys(nodes: Array<{ expanded?: boolean; key?: string; data?: { slug?: unknown }; childNodes?: unknown[] }>) {
+  const keys: string[] = []
+
+  for (const node of nodes) {
+    const slug = typeof node.data?.slug === 'string'
+      ? node.data.slug
+      : (typeof node.key === 'string' ? node.key : null)
+
+    if (node.expanded && slug) {
+      keys.push(slug)
+    }
+    if (Array.isArray(node.childNodes) && node.childNodes.length > 0) {
+      keys.push(...collectExpandedKeys(node.childNodes as Array<{ expanded?: boolean; key?: string; data?: { slug?: unknown }; childNodes?: unknown[] }>))
+    }
+  }
+
+  return keys
+}
+
+function updateExpandedKeys() {
+  nextTick(() => {
+    const tab = currentFile.value
+    const root = tocTreeRef.value?.store?.root
+    if (!tab || !root?.childNodes) return
+
+    tab.expandedTocKeys = collectExpandedKeys(root.childNodes)
+  })
+}
+
 // Re-apply when slug changes or when tree data is replaced (e.g. new file loaded)
 watch(activeHeadingSlug, applyCurrentKey)
-watch(tocData, applyCurrentKey)
+watch(currentFile, () => {
+  initialExpandedTocKeys.value = getDefaultExpandedTocKeys()
+})
+watch(tocData, () => {
+  initialExpandedTocKeys.value = getDefaultExpandedTocKeys()
+  applyCurrentKey()
+})
 
 const handleClick = (data: { slug?: unknown }): void => {
   // editor.vue builds a CSS selector with `#${slug}` — bail out if the

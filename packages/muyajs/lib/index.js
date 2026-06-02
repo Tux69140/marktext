@@ -188,12 +188,24 @@ class Muya {
     return this.contentState.getCursor()
   }
 
+  getFoldedHeadingKeys() {
+    return Array.from(this.contentState.foldedHeadings)
+  }
+
+  setFoldedHeadingKeys(keys = []) {
+    this.contentState.clearHeadingFolds()
+    for (const key of keys) {
+      this.contentState.foldedHeadings.add(key)
+    }
+  }
+
   setMarkdown(
     markdown,
     cursor,
     isRenderCursor = true,
     muyaIndexCursor = undefined,
-    blocks = undefined
+    blocks = undefined,
+    foldedHeadingKeys = undefined
   ) {
     let finalCursor = null
     this.contentState.clearHeadingFolds()
@@ -220,6 +232,10 @@ class Muya {
     } else {
       // No cursor defined, we can just parse the markdown
       this.contentState.importMarkdown(markdown)
+    }
+
+    if (Array.isArray(foldedHeadingKeys) && foldedHeadingKeys.length > 0) {
+      this.setFoldedHeadingKeys(foldedHeadingKeys)
     }
 
     this.contentState.importCursor(finalCursor)

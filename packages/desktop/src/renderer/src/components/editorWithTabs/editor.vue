@@ -1164,6 +1164,23 @@ interface FileChangePayload {
   scrollTop?: number
   muyaIndexCursor?: unknown
   blocks?: unknown
+  foldedHeadingKeys?: string[]
+}
+
+const currentTabId = ref<string | null>(null)
+
+const prepareTabSwitch = () => {
+  if (!editor.value || !currentTabId.value) return
+
+  editorStore.LISTEN_FOR_CONTENT_CHANGE({
+    id: currentTabId.value,
+    markdown: editor.value.getMarkdown(),
+    cursor: editor.value.getCursor(),
+    history: editor.value.getHistory(),
+    toc: editor.value.getTOC(),
+    blocks: editor.value.contentState.getBlocks(),
+    foldedHeadingKeys: editor.value.getFoldedHeadingKeys()
+  })
 }
 
 // listen for markdown change form source mode or change tabs etc
@@ -1175,30 +1192,46 @@ const handleFileChange = (payload: unknown) => {
     history,
     scrollTop,
     muyaIndexCursor,
-    blocks = undefined
+    blocks = undefined,
+    foldedHeadingKeys = undefined
   } = (payload ?? {}) as FileChangePayload
+  if (!editor.value) return
+
+  const nextTabId = typeof (payload as { id?: unknown })?.id === 'string'
+    ? (payload as { id: string }).id
+    : null
+  if (currentTabId.value && nextTabId && currentTabId.value !== nextTabId) {
+    prepareTabSwitch()
+  }
+  currentTabId.value = nextTabId
+
   const { container } = editor.value
 
-  if (editor.value) {
-    if (history) {
-      editor.value.setHistory(history)
-    }
+  if (history) {
+    editor.value.setHistory(history)
+  }
 
-    if (typeof newMarkdown === 'string') {
-      editor.value.setMarkdown(newMarkdown, newCursor, renderCursor, muyaIndexCursor, blocks)
-    } else if (newCursor) {
-      editor.value.setCursor(newCursor)
-    }
+  if (typeof newMarkdown === 'string') {
+    editor.value.setMarkdown(
+      newMarkdown,
+      newCursor,
+      renderCursor,
+      muyaIndexCursor,
+      blocks,
+      foldedHeadingKeys
+    )
+  } else if (newCursor) {
+    editor.value.setCursor(newCursor)
+  }
 
-    if (typeof scrollTop === 'number') {
-      container.style.visibility = 'hidden'
-      container.style.pointerEvents = 'none'
-      scrollToCords(scrollTop)
-    } else {
-      container.style.visibility = 'visible'
-      container.style.pointerEvents = 'auto'
-      scrollToCursor(0)
-    }
+  if (typeof scrollTop === 'number') {
+    container.style.visibility = 'hidden'
+    container.style.pointerEvents = 'none'
+    scrollToCords(scrollTop)
+  } else {
+    container.style.visibility = 'visible'
+    container.style.pointerEvents = 'auto'
+    scrollToCursor(0)
   }
 }
 
@@ -1307,6 +1340,7 @@ onMounted(() => {
   }
 
   editor.value = new Muya(ele, options)
+  currentTabId.value = currentFile.value?.id ?? null
 
   const { container } = editor.value
 
@@ -1361,8 +1395,7 @@ onMounted(() => {
   editor.value.on('change', (changes: MuyaChange) => {
     // There is a chance that this event is fired AFTER the tab is switched. If we purely rely on this.currentFile later on
     // it can cause invalid updates. Hence, we need the id to identify changes as part of each tab
-    if (!currentFile.value) return
-    const { id } = currentFile.value
+    const id = currentTabId.value
     if (id) {
       editorStore.LISTEN_FOR_CONTENT_CHANGE(
         Object.assign(changes, { id, blocks: editor.value.contentState.getBlocks() })
@@ -1371,8 +1404,8 @@ onMounted(() => {
   })
 
   editor.value.on('scroll', (scrollEvent: { scrollTop: number }) => {
-    if (currentFile.value) {
-      editorStore.updateScrollPosition(currentFile.value.id, scrollEvent.scrollTop)
+    if (currentTabId.value) {
+      editorStore.updateScrollPosition(currentTabId.value, scrollEvent.scrollTop)
     }
   })
 

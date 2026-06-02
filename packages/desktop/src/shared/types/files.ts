@@ -87,6 +87,9 @@ export interface IFileState {
   lastSavedHistoryId?: number
   // Muya block tree; only populated for the actively edited tab.
   blocks?: unknown
+  foldedHeadingKeys?: string[]
+  sourceFoldedLines?: number[]
+  expandedTocKeys?: string[]
   isMixedLineEndings?: boolean
 }
 

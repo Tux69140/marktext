@@ -102,6 +102,8 @@ interface ContentChangePayload {
   history?: IFileState['history']
   toc?: TocItem[]
   blocks?: unknown
+  foldedHeadingKeys?: string[]
+  sourceFoldedLines?: number[]
 }
 
 interface SelectionChange {
@@ -393,7 +395,7 @@ export const useEditorStore = defineStore('editor', {
       if (currentFile && pathname === currentFile.pathname) {
         // save current state first
         this.currentFile = tab
-        const { id, cursor, history, scrollTop, muyaIndexCursor } = tab // Should not use blocks history as this is loaded from disk
+        const { id, cursor, history, scrollTop, muyaIndexCursor, foldedHeadingKeys, sourceFoldedLines } = tab // Should not use blocks history as this is loaded from disk
         bus.emit('file-changed', {
           id,
           markdown,
@@ -401,7 +403,9 @@ export const useEditorStore = defineStore('editor', {
           cursor,
           renderCursor: true,
           history,
-          scrollTop
+          scrollTop,
+          foldedHeadingKeys,
+          sourceFoldedLines
         })
       }
       debouncedSendBufferedState()
@@ -835,8 +839,18 @@ export const useEditorStore = defineStore('editor', {
       const oldCurrentFile = this.currentFile
       let didUpdateCurrentFile = false
       if (oldCurrentFile == null || oldCurrentFile.id !== currentFile.id) {
-        const { id, markdown, cursor, history, pathname, scrollTop, blocks, muyaIndexCursor } =
-          currentFile
+        const {
+          id,
+          markdown,
+          cursor,
+          history,
+          pathname,
+          scrollTop,
+          blocks,
+          muyaIndexCursor,
+          foldedHeadingKeys,
+          sourceFoldedLines
+        } = currentFile
         window.DIRNAME = pathname ? window.path.dirname(pathname) : ''
         this.currentFile = currentFile
         didUpdateCurrentFile = true
@@ -854,7 +868,9 @@ export const useEditorStore = defineStore('editor', {
           renderCursor: true,
           history,
           scrollTop,
-          blocks
+          blocks,
+          foldedHeadingKeys,
+          sourceFoldedLines
         })
       }
 
@@ -1024,8 +1040,18 @@ export const useEditorStore = defineStore('editor', {
           this.tabs[index] ?? this.tabs[index - 1] ?? this.tabs[0] ?? null
         this.currentFile = fileState
         if (fileState && typeof fileState.markdown === 'string') {
-          const { id, markdown, cursor, history, pathname, scrollTop, blocks, muyaIndexCursor } =
-            fileState
+          const {
+            id,
+            markdown,
+            cursor,
+            history,
+            pathname,
+            scrollTop,
+            blocks,
+            muyaIndexCursor,
+            foldedHeadingKeys,
+            sourceFoldedLines
+          } = fileState
           window.DIRNAME = pathname ? window.path.dirname(pathname) : ''
           bus.emit('file-changed', {
             id,
@@ -1035,7 +1061,9 @@ export const useEditorStore = defineStore('editor', {
             renderCursor: true,
             history,
             scrollTop,
-            blocks
+            blocks,
+            foldedHeadingKeys,
+            sourceFoldedLines
           })
         } else {
           window.DIRNAME = ''
@@ -1115,8 +1143,18 @@ export const useEditorStore = defineStore('editor', {
         this.currentFile =
           this.tabs[tabIndex] ?? this.tabs[tabIndex - 1] ?? this.tabs[0] ?? null
         if (this.currentFile && typeof this.currentFile.markdown === 'string') {
-          const { id, markdown, cursor, history, pathname, scrollTop, blocks, muyaIndexCursor } =
-            this.currentFile
+          const {
+            id,
+            markdown,
+            cursor,
+            history,
+            pathname,
+            scrollTop,
+            blocks,
+            muyaIndexCursor,
+            foldedHeadingKeys,
+            sourceFoldedLines
+          } = this.currentFile
           window.DIRNAME = pathname ? window.path.dirname(pathname) : ''
           bus.emit('file-changed', {
             id,
@@ -1126,7 +1164,9 @@ export const useEditorStore = defineStore('editor', {
             renderCursor: true,
             history,
             scrollTop,
-            blocks
+            blocks,
+            foldedHeadingKeys,
+            sourceFoldedLines
           })
         }
       }
@@ -1383,7 +1423,9 @@ export const useEditorStore = defineStore('editor', {
       muyaIndexCursor,
       history,
       toc,
-      blocks
+      blocks,
+      foldedHeadingKeys,
+      sourceFoldedLines
     }: ContentChangePayload): void {
       const preferencesStore = usePreferencesStore()
       const { autoSave } = preferencesStore
@@ -1415,6 +1457,8 @@ export const useEditorStore = defineStore('editor', {
       if (muyaIndexCursor) tab.muyaIndexCursor = muyaIndexCursor
       if (history) tab.history = history
       if (blocks) tab.blocks = blocks
+      if (Array.isArray(foldedHeadingKeys)) tab.foldedHeadingKeys = foldedHeadingKeys
+      if (Array.isArray(sourceFoldedLines)) tab.sourceFoldedLines = sourceFoldedLines
 
       // Only update TOC if it's the current file
       if (id === this.currentFile?.id && toc && !equal(toc, this.listToc)) {
@@ -1974,6 +2018,9 @@ interface BufferedTabState {
   wordCount: IFileState['wordCount']
   muyaIndexCursor: unknown
   scrollTop: number
+  foldedHeadingKeys?: string[]
+  sourceFoldedLines?: number[]
+  expandedTocKeys?: string[]
 }
 
 const createBufferedTabState = (tab: Partial<IFileState> & { id: string }): BufferedTabState => {
@@ -1993,7 +2040,10 @@ const createBufferedTabState = (tab: Partial<IFileState> & { id: string }): Buff
     cursor: toSerializableValue(tab.cursor, defaultFileState.cursor),
     wordCount: toSerializableValue(tab.wordCount, defaultFileState.wordCount),
     muyaIndexCursor: toSerializableValue(tab.muyaIndexCursor, defaultFileState.muyaIndexCursor),
-    scrollTop: tab.scrollTop ?? defaultFileState.scrollTop
+    scrollTop: tab.scrollTop ?? defaultFileState.scrollTop,
+    foldedHeadingKeys: Array.isArray(tab.foldedHeadingKeys) ? [...tab.foldedHeadingKeys] : undefined,
+    sourceFoldedLines: Array.isArray(tab.sourceFoldedLines) ? [...tab.sourceFoldedLines] : undefined,
+    expandedTocKeys: Array.isArray(tab.expandedTocKeys) ? [...tab.expandedTocKeys] : undefined
   }
 }
 

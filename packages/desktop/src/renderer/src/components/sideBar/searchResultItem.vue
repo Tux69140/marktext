@@ -153,7 +153,8 @@ const handleSearchResultClick = (searchMatch: SearchMatch): void => {
         markdown,
         cursor: currentFile.value.cursor,
         renderCursor: true,
-        history
+        history,
+        sourceFoldedLines: currentFile.value.sourceFoldedLines
       })
     }
   } else {

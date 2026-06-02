@@ -191,7 +191,8 @@ const prepareTabSwitch = () => {
     editorStore.LISTEN_FOR_CONTENT_CHANGE({
       id: tabId.value,
       markdown: newMarkdown,
-      muyaIndexCursor: cursor
+      muyaIndexCursor: cursor,
+      sourceFoldedLines: getSourceFoldedLines(editor.value)
     })
     tabId.value = null
   }
@@ -201,10 +202,43 @@ interface FileChangePayloadLike {
   id: string
   markdown?: string
   muyaIndexCursor?: unknown
+  sourceFoldedLines?: number[]
+  scrollTop?: number
+}
+
+const getSourceFoldedLines = (cm: CMInstance): number[] => {
+  const lines: number[] = []
+
+  for (const mark of cm.getAllMarks()) {
+    if (!mark.__isFold) continue
+
+    const range = mark.find()
+    if (range && typeof range.from?.line === 'number') {
+      lines.push(range.from.line)
+    }
+  }
+
+  return lines.sort((a, b) => a - b)
+}
+
+const applySourceFoldedLines = (cm: CMInstance, lines: number[] | undefined) => {
+  cm.operation(() => {
+    clearSourceFolds(cm)
+
+    if (!Array.isArray(lines) || lines.length === 0) return
+
+    for (const line of lines) {
+      const pos = codeMirror.Pos(line, 0)
+      const range = codeMirror.fold.markdown(cm, pos)
+      if (range) {
+        cm.foldCode(pos, getSourceFoldOptions(), 'fold')
+      }
+    }
+  })
 }
 
 const handleFileChange = (payload: unknown) => {
-  const { id, markdown: newMarkdown, muyaIndexCursor } = payload as FileChangePayloadLike
+  const { id, markdown: newMarkdown, muyaIndexCursor, sourceFoldedLines, scrollTop } = payload as FileChangePayloadLike
   if (!editor.value) return
 
   // On same-tab reload (external file change), preserve scroll across
@@ -247,7 +281,12 @@ const handleFileChange = (payload: unknown) => {
 
   if (typeof newMarkdown === 'string') {
     const didChange = editor.value.getValue() !== newMarkdown
+    clearSourceFolds(editor.value)
     editor.value.setValue(newMarkdown)
+    requestAnimationFrame(() => {
+      if (!editor.value || tabId.value !== id) return
+      applySourceFoldedLines(editor.value, sourceFoldedLines)
+    })
     if (didChange) {
       clearNativeHistory(editor.value)
       clearSourceHistory()
@@ -258,7 +297,7 @@ const handleFileChange = (payload: unknown) => {
   if (isValidMuyaIndexCursor(muyaIndexCursor)) {
     const { anchor, focus } = muyaIndexCursor
 
-    editor.value.setSelection(anchor, focus, { scroll: true }) // Scroll the focus into view.
+    editor.value.setSelection(anchor, focus, { scroll: false })
   } else if (scrollTargets.length) {
     const restoreScroll = () => {
       for (const { el, top } of scrollTargets) el.scrollTop = top
@@ -268,6 +307,13 @@ const handleFileChange = (payload: unknown) => {
     requestAnimationFrame(restoreScroll)
   } else {
     setCursorAtFirstLine(editor.value)
+  }
+
+  if (typeof scrollTop === 'number') {
+    requestAnimationFrame(() => {
+      if (!editor.value || tabId.value !== id) return
+      editor.value.scrollTo(null, scrollTop)
+    })
   }
 }
 
@@ -324,6 +370,8 @@ const foldAllSourceHeadings = () => {
       }
     }
   })
+
+  saveContent(cm)
 }
 
 const unfoldAllSourceHeadings = () => {
@@ -331,6 +379,7 @@ const unfoldAllSourceHeadings = () => {
 
   const cm = editor.value
   cm.operation(() => clearSourceFolds(cm))
+  saveContent(cm)
 }
 
 const unfoldSourceLine = (line: number) => {
@@ -520,7 +569,8 @@ const saveContent = (cm: CMInstance) => {
         id: tabId.value,
         markdown: newMarkdown,
         wordCount,
-        muyaIndexCursor: cursor
+        muyaIndexCursor: cursor,
+        sourceFoldedLines: getSourceFoldedLines(cm)
       })
     } else {
       // This may occur during tab switching but should not occur otherwise.
@@ -625,6 +675,15 @@ const listenChange = (cm: CMInstance) => {
 
     saveContent(instance)
   })
+
+  cm.on('scroll', (instance: CMInstance) => {
+    if (!tabId.value) return
+
+    const info = instance.getScrollInfo?.()
+    if (info && typeof info.top === 'number') {
+      editorStore.updateScrollPosition(tabId.value, info.top)
+    }
+  })
 }
 
 const configureSourceEditor = (
@@ -634,6 +693,11 @@ const configureSourceEditor = (
 ): void => {
   cm.setOption('mode', 'markdown-math')
   cm.on('contextmenu', handleSourceContextMenu)
+  cm.on('gutterClick', (_instance: CMInstance, _line: number, gutter: string) => {
+    if (gutter === SOURCE_FOLD_GUTTER) {
+      setTimeout(() => saveContent(cm), 0)
+    }
+  })
   clearNativeHistory(cm)
 
   if (selection) {
