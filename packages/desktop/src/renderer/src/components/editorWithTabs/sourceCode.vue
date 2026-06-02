@@ -71,6 +71,7 @@ const getSourceFoldOptions = () => ({
 const props = defineProps<{
   markdown?: string
   muyaIndexCursor?: unknown
+  sourceFoldedLines?: number[]
   textDirection: string
 }>()
 
@@ -1134,9 +1135,19 @@ onMounted(() => {
 
   if (isValidMuyaIndexCursor(muyaIndexCursor)) {
     const { anchor, focus } = muyaIndexCursor
-    createSourceEditor(markdown ?? '', { anchor, focus }, true)
+    const cm = createSourceEditor(markdown ?? '', { anchor, focus }, true)
+    requestAnimationFrame(() => {
+      if (cm) {
+        applySourceFoldedLines(cm, props.sourceFoldedLines)
+      }
+    })
   } else {
-    createSourceEditor(markdown ?? '')
+    const cm = createSourceEditor(markdown ?? '')
+    requestAnimationFrame(() => {
+      if (cm) {
+        applySourceFoldedLines(cm, props.sourceFoldedLines)
+      }
+    })
   }
 
   tabId.value = id

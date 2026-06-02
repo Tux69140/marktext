@@ -19,7 +19,9 @@ export interface BufferedLayoutState {
 }
 
 export interface BufferedState {
-  editor?: BufferedEditorState
+  tabs?: BufferedEditorState['tabs']
+  currentFileId?: BufferedEditorState['currentFileId']
+  restoreWarnings?: unknown[]
   project?: BufferedProjectState
   layout?: BufferedLayoutState
   [key: string]: unknown

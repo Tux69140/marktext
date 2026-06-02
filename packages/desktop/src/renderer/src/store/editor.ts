@@ -1323,9 +1323,14 @@ export const useEditorStore = defineStore('editor', {
       )
 
       if (selected) {
-        const { id, markdown } = fileState
+        const { id, markdown, cursor, sourceFoldedLines } = fileState
         this.UPDATE_CURRENT_FILE(fileState)
-        bus.emit('file-loaded', { id, markdown })
+        bus.emit('file-loaded', {
+          id,
+          markdown,
+          sourceFoldedLines,
+          cursor
+        })
       } else {
         this.tabs.push(fileState)
         this.updateTabIdToIndex()
@@ -1386,11 +1391,11 @@ export const useEditorStore = defineStore('editor', {
           options as Record<string, unknown>
         )
       )
-      const { id, cursor } = docState
+      const { id, cursor, sourceFoldedLines } = docState
 
       if (selected) {
         this.UPDATE_CURRENT_FILE(docState)
-        bus.emit('file-loaded', { id, markdown, cursor })
+        bus.emit('file-loaded', { id, markdown, cursor, sourceFoldedLines })
       } else {
         this.tabs.push(docState)
         this.updateTabIdToIndex()

@@ -181,6 +181,8 @@ const props = defineProps<{
   cursor?: unknown
   textDirection: string
   platform?: string
+  foldedHeadingKeys?: string[]
+  foldedHeadingRefs?: IFileState['foldedHeadingRefs']
 }>()
 
 // Get stores
@@ -1157,6 +1159,22 @@ const setMarkdownToEditor = (payload: unknown) => {
   }
 }
 
+const restoreFoldedHeadingState = () => {
+  if (!editor.value) return
+
+  if (Array.isArray(props.foldedHeadingKeys) || Array.isArray(props.foldedHeadingRefs)) {
+    editor.value.setMarkdown(
+      props.markdown,
+      props.cursor,
+      true,
+      undefined,
+      undefined,
+      props.foldedHeadingKeys,
+      props.foldedHeadingRefs
+    )
+  }
+}
+
 interface FileChangePayload {
   markdown?: string
   cursor?: unknown
@@ -1345,6 +1363,7 @@ onMounted(() => {
   }
 
   editor.value = new Muya(ele, options)
+  restoreFoldedHeadingState()
   currentTabId.value = currentFile.value?.id ?? null
 
   const { container } = editor.value

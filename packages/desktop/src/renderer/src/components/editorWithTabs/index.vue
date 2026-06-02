@@ -14,11 +14,14 @@
         :cursor="cursor"
         :text-direction="textDirection"
         :platform="platform"
+        :folded-heading-keys="foldedHeadingKeys"
+        :folded-heading-refs="foldedHeadingRefs"
       />
       <source-code
         v-if="sourceCode"
         :markdown="markdown"
         :muya-index-cursor="muyaIndexCursor"
+        :source-folded-lines="sourceFoldedLines"
         :text-direction="textDirection"
       />
     </div>
@@ -35,6 +38,7 @@ import SourceCode from './sourceCode.vue'
 import TabNotifications from './notifications.vue'
 import FormattingToolbar from './formattingToolbar.vue'
 import { usePreferencesStore } from '@/store/preferences'
+import type { IFileState } from '@shared/types/files'
 
 defineProps<{
   markdown: string
@@ -44,9 +48,12 @@ defineProps<{
   cursor: unknown
   muyaIndexCursor?: unknown
   sourceCode: boolean
+  sourceFoldedLines?: number[]
   showTabBar: boolean
   textDirection: string
   platform: string
+  foldedHeadingKeys?: string[]
+  foldedHeadingRefs?: IFileState['foldedHeadingRefs']
 }>()
 
 const { effectiveSideBarWidth } = storeToRefs(useLayoutStore())

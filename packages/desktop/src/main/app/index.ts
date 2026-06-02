@@ -555,11 +555,8 @@ class App {
       }
       if (!bufferedState || typeof bufferedState !== 'object') continue
 
-      const normalized = bufferedState as Record<string, unknown>
-      const editorState = normalized.editor as unknown
-      if (!editorState || typeof editorState !== 'object') continue
-
-      const { tabs = [], restoreWarnings = [] } = editorState as {
+      const normalized = bufferedState as BufferedState
+      const { tabs = [], restoreWarnings = [] } = normalized as {
         tabs?: unknown
         currentFileId?: string | null
         currentFile?: { id?: string } | null
@@ -571,9 +568,9 @@ class App {
         primaryState = normalized as BufferedState
       }
 
-      const currentFileId = (editorState as { currentFileId?: string | null; currentFile?: { id?: string } })
+      const currentFileId = (normalized as { currentFileId?: string | null; currentFile?: { id?: string } })
         .currentFileId
-        ?? (editorState as { currentFile?: { id?: string } }).currentFile?.id
+        ?? (normalized as { currentFile?: { id?: string } }).currentFile?.id
         ?? null
 
       for (const tab of tabs) {
@@ -605,21 +602,18 @@ class App {
       return null
     }
 
-    const mergedEditorState: Record<string, unknown> & { tabs: IFileState[]; restoreWarnings?: unknown[] } = {
-      ...(primaryState.editor as Record<string, unknown>),
+    const mergedState: BufferedState = {
+      ...primaryState,
       tabs: mergedTabs,
       restoreWarnings: mergedWarnings
     }
     if (mergedCurrentFileId) {
-      mergedEditorState.currentFileId = mergedCurrentFileId
+      mergedState.currentFileId = mergedCurrentFileId
     } else {
-      delete mergedEditorState.currentFileId
+      delete mergedState.currentFileId
     }
 
-    return {
-      ...primaryState,
-      editor: mergedEditorState
-    } as BufferedState
+    return mergedState
   }
 
   /**
