@@ -233,8 +233,7 @@ if (!fs.existsSync(electronInstall)) {
       if (fs.existsSync(distDir)) fs.rmSync(distDir, { recursive: true, force: true })
       fs.mkdirSync(distDir, { recursive: true })
       run(
-        `powershell.exe -NoProfile -Command ` +
-          `"Expand-Archive -LiteralPath ${quotePowerShell(zipPath)} -DestinationPath ${quotePowerShell(distDir)} -Force"`
+        `powershell.exe -NoProfile -Command 'Expand-Archive -LiteralPath ${quotePowerShell(zipPath)} -DestinationPath ${quotePowerShell(distDir)} -Force'`
       )
       fs.writeFileSync(pathTxt, platformBinary)
       fs.writeFileSync(path.join(distDir, 'version'), version)

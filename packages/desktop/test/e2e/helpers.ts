@@ -255,11 +255,32 @@ export const getMarkdownContent = async(
 
 export const typeIntoEditor = async(page: Page, text: string): Promise<void> => {
   await placeCaretInEditor(page)
-  const previousClipboard = await page.evaluate(() => window.electron.clipboard.readText())
-  await page.evaluate((value) => window.electron.clipboard.writeText(value), text)
-  await page.keyboard.press('ControlOrMeta+V')
-  await page.waitForTimeout(100)
-  await page.evaluate((value) => window.electron.clipboard.writeText(value), previousClipboard)
+  const targetText = text.trim()
+  const waitForText = async(): Promise<boolean> => {
+    return await page.evaluate((needle) => {
+      const editor = document.querySelector('.editor-component')
+      return !!editor && editor.textContent?.includes(needle)
+    }, targetText)
+  }
+  const wasInserted = await waitForText()
+  if (wasInserted) return
+  const tryPaste = async(): Promise<boolean> => {
+    const previousClipboard = await page.evaluate(() => window.electron.clipboard.readText())
+    await page.evaluate((value) => window.electron.clipboard.writeText(value), text)
+    await page.keyboard.press('ControlOrMeta+V')
+    await page.waitForTimeout(120)
+    await page.evaluate((value) => window.electron.clipboard.writeText(value), previousClipboard)
+    return await waitForText()
+  }
+  const didPaste = await tryPaste()
+  if (didPaste) return
+  await page.keyboard.type(text, { delay: 5 })
+  const timeout = Date.now() + 1500
+  while (Date.now() < timeout) {
+    if (await waitForText()) return
+    await page.waitForTimeout(50)
+  }
+  await page.waitForTimeout(120)
 }
 
 // Muya validates selections via `node.closest('span.ag-paragraph')` — the inner
