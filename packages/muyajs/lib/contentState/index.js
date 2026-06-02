@@ -102,6 +102,7 @@ class ContentState {
     this._selectedTableCells = null
     this.cellSelectEventIds = []
     this.foldedHeadings = new Set()
+    this.foldHiddenBlocks = new Map()
     this.init()
   }
 
@@ -235,6 +236,7 @@ class ContentState {
   }
 
   render(isRenderCursor = true, clearCache = false) {
+    this.refreshFoldHiddenBlocks()
     this.ensureCursorVisible()
     const {
       blocks,
@@ -259,6 +261,7 @@ class ContentState {
   }
 
   partialRender(isRenderCursor = true) {
+    this.refreshFoldHiddenBlocks()
     this.ensureCursorVisible()
     const {
       blocks,
@@ -298,6 +301,7 @@ class ContentState {
   }
 
   singleRender(block, isRenderCursor = true) {
+    this.refreshFoldHiddenBlocks()
     this.ensureCursorVisible()
     const {
       blocks,

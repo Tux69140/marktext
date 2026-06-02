@@ -185,7 +185,11 @@ class StateRender {
   render(blocks, activeBlocks, matches) {
     const selector = `div#${CLASS_OR_ID.AG_EDITOR_ID}`
     const t = this.muya.options.t || ((key) => key) // Get the translation function, falling back to returning the key itself if absent
-    const children = blocks.map((block) => {
+    const contentState = this.muya.contentState
+    const visibleBlocks = contentState.foldedHeadings.size
+      ? blocks.filter((block) => !contentState.isBlockHiddenByFold(block))
+      : blocks
+    const children = visibleBlocks.map((block) => {
       return this.renderBlock(null, block, activeBlocks, matches, true, t)
     })
     const newVdom = h(selector, children)

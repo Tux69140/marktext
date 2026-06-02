@@ -213,7 +213,7 @@ class Muya {
     if (blocks && cursor) {
       // We have blocks and a cursor, so we can set the blocks and the cursor in the contentState.
       finalCursor = cursor
-      this.contentState.setBlocks(JSON.parse(JSON.stringify(blocks)))
+      this.contentState.setBlocks(blocks)
     } else if (muyaIndexCursor && muyaIndexCursor.anchor && muyaIndexCursor.focus) {
       // We do not have a cursor, but we have a muyaIndexCursor, which is not based on a block key.
       // We need to convert the muyaIndexCursor to a cursor, so we can set it in the contentState.

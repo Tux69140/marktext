@@ -16,6 +16,7 @@ import {
   TrailingNewlineCommand
 } from '../commands'
 import { defineStore } from 'pinia'
+import { markRaw, toRaw } from 'vue'
 import { usePreferencesStore } from './preferences'
 import { useProjectStore } from './project'
 import { useLayoutStore } from './layout'
@@ -42,6 +43,8 @@ interface TocItem extends ListItem {
 }
 
 type TocTreeNode = TreeNode<TocItem>
+
+const asRawBlocks = <T>(blocks: T): T => markRaw(toRaw(blocks) as object) as T
 
 interface RestoreWarning {
   tabId?: string | null
@@ -868,7 +871,7 @@ export const useEditorStore = defineStore('editor', {
           renderCursor: true,
           history,
           scrollTop,
-          blocks,
+          blocks: blocks ? asRawBlocks(blocks) : blocks,
           foldedHeadingKeys,
           sourceFoldedLines
         })
@@ -1061,7 +1064,7 @@ export const useEditorStore = defineStore('editor', {
             renderCursor: true,
             history,
             scrollTop,
-            blocks,
+            blocks: blocks ? asRawBlocks(blocks) : blocks,
             foldedHeadingKeys,
             sourceFoldedLines
           })
@@ -1164,7 +1167,7 @@ export const useEditorStore = defineStore('editor', {
             renderCursor: true,
             history,
             scrollTop,
-            blocks,
+            blocks: blocks ? asRawBlocks(blocks) : blocks,
             foldedHeadingKeys,
             sourceFoldedLines
           })
@@ -1456,7 +1459,7 @@ export const useEditorStore = defineStore('editor', {
       if (cursor) tab.cursor = cursor
       if (muyaIndexCursor) tab.muyaIndexCursor = muyaIndexCursor
       if (history) tab.history = history
-      if (blocks) tab.blocks = blocks
+      if (blocks) tab.blocks = asRawBlocks(blocks)
       if (Array.isArray(foldedHeadingKeys)) tab.foldedHeadingKeys = foldedHeadingKeys
       if (Array.isArray(sourceFoldedLines)) tab.sourceFoldedLines = sourceFoldedLines
 

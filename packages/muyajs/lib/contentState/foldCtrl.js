@@ -25,6 +25,37 @@ const foldCtrl = (ContentState) => {
     return this.isHeadingBlock(block) && this.foldedHeadings.has(block.key)
   }
 
+  ContentState.prototype.refreshFoldHiddenBlocks = function() {
+    const hiddenBlocks = new Map()
+
+    if (this.foldedHeadings.size === 0) {
+      this.foldHiddenBlocks = hiddenBlocks
+      return
+    }
+
+    const foldStack = []
+    for (const block of this.blocks) {
+      const level = getHeadingLevel(block)
+
+      if (level > 0) {
+        while (foldStack.length && level <= foldStack[foldStack.length - 1].level) {
+          foldStack.pop()
+        }
+      }
+
+      const foldedParent = foldStack.length ? foldStack[foldStack.length - 1].heading : null
+      if (foldedParent && block !== foldedParent) {
+        hiddenBlocks.set(block.key, foldedParent)
+      }
+
+      if (level > 0 && this.isHeadingFolded(block)) {
+        foldStack.push({ level, heading: block })
+      }
+    }
+
+    this.foldHiddenBlocks = hiddenBlocks
+  }
+
   ContentState.prototype.getSectionBlocks = function(heading) {
     const level = getHeadingLevel(heading)
     const sectionBlocks = []
@@ -47,14 +78,24 @@ const foldCtrl = (ContentState) => {
     if (!block || this.foldedHeadings.size === 0) return null
 
     const outmostBlock = block.parent ? this.findOutMostBlock(block) : block
-    let heading = this.getBlock(outmostBlock.preSibling)
+    const hiddenHeading = this.foldHiddenBlocks && this.foldHiddenBlocks.get(outmostBlock.key)
+    if (hiddenHeading) return hiddenHeading
 
-    while (heading) {
-      if (this.isHeadingFolded(heading) && this.getSectionBlocks(heading).includes(outmostBlock)) {
-        return heading
+    let candidate = this.getBlock(outmostBlock.preSibling)
+    let minCloserHeadingLevel = Infinity
+
+    while (candidate) {
+      const level = getHeadingLevel(candidate)
+
+      if (level > 0) {
+        if (level < minCloserHeadingLevel && this.isHeadingFolded(candidate)) {
+          return candidate
+        }
+
+        minCloserHeadingLevel = Math.min(minCloserHeadingLevel, level)
       }
 
-      heading = this.getBlock(heading.preSibling)
+      candidate = this.getBlock(candidate.preSibling)
     }
 
     return null
@@ -64,7 +105,7 @@ const foldCtrl = (ContentState) => {
     if (!block || this.foldedHeadings.size === 0) return false
 
     const outmostBlock = block.parent ? this.findOutMostBlock(block) : block
-    return outmostBlock === block && !!this.getFoldHeadingForBlock(outmostBlock)
+    return outmostBlock === block && this.foldHiddenBlocks.has(outmostBlock.key)
   }
 
   ContentState.prototype.moveCursorToHeading = function(heading) {
@@ -106,6 +147,7 @@ const foldCtrl = (ContentState) => {
     while (heading) {
       this.foldedHeadings.delete(heading.key)
       didUnfold = true
+      this.refreshFoldHiddenBlocks()
       heading = this.getFoldHeadingForBlock(heading)
     }
 
@@ -130,6 +172,7 @@ const foldCtrl = (ContentState) => {
       this.foldedHeadings.delete(heading.key)
     } else {
       this.foldedHeadings.add(heading.key)
+      this.refreshFoldHiddenBlocks()
       this.ensureCursorVisible()
     }
 
@@ -143,17 +186,20 @@ const foldCtrl = (ContentState) => {
       }
     }
 
+    this.refreshFoldHiddenBlocks()
     this.ensureCursorVisible()
     this.render()
   }
 
   ContentState.prototype.unfoldAllHeadings = function() {
     this.foldedHeadings.clear()
+    this.refreshFoldHiddenBlocks()
     this.render()
   }
 
   ContentState.prototype.clearHeadingFolds = function() {
     this.foldedHeadings.clear()
+    this.refreshFoldHiddenBlocks()
   }
 }
 
