@@ -1,9 +1,12 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment, @typescript-eslint/no-require-imports */
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
-'use strict'
 
-const path = require('path')
-const thirdPartyChecker = require('./thirdPartyChecker.js')
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { validateLicenses } from './thirdPartyChecker.ts'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 const desktopRoot = path.resolve(__dirname, '..', 'packages/desktop')
 
-thirdPartyChecker.validateLicenses(desktopRoot)
+validateLicenses(desktopRoot)

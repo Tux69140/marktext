@@ -7,6 +7,12 @@ interface MockI18nUtils {
 // Window.i18nUtils is required in the runtime contextBridge typing, but in
 // this unit test we install a mock with `vi.fn` and remove it between specs.
 const win = window as unknown as { i18nUtils?: MockI18nUtils }
+const getI18nUtils = (): MockI18nUtils => {
+  if (!win.i18nUtils) {
+    throw new Error('Expected i18nUtils mock to be installed')
+  }
+  return win.i18nUtils
+}
 
 describe('renderer i18n language loading', () => {
   beforeEach(() => {
@@ -32,7 +38,7 @@ describe('renderer i18n language loading', () => {
 
     setLanguage('en')
 
-    expect(win.i18nUtils!.loadTranslations).not.toHaveBeenCalled()
+    expect(getI18nUtils().loadTranslations).not.toHaveBeenCalled()
     expect(getCurrentLanguage()).to.equal('en')
   })
 
@@ -42,7 +48,7 @@ describe('renderer i18n language loading', () => {
     setLanguage('zh-CN')
     setLanguage('zh-CN')
 
-    expect(win.i18nUtils!.loadTranslations).toHaveBeenCalledTimes(1)
-    expect(win.i18nUtils!.loadTranslations).toHaveBeenCalledWith('zh-CN')
+    expect(getI18nUtils().loadTranslations).toHaveBeenCalledTimes(1)
+    expect(getI18nUtils().loadTranslations).toHaveBeenCalledWith('zh-CN')
   })
 })

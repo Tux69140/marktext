@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import type { Page } from 'playwright'
 import { launchWithMarkdown, sendIpcToRenderer } from './helpers'
 
 const tabSelector = '.tabs-container > li'
@@ -22,7 +23,7 @@ const createLongFoldableDocument = (): string => {
   return lines.join('\n')
 }
 
-const foldFirstHeading = async(page: import('playwright').Page): Promise<void> => {
+const foldFirstHeading = async(page: Page): Promise<void> => {
   await page.evaluate(() => {
     const heading = document.querySelector('.editor-component h1')
     const toggle = heading?.querySelector('.ag-heading-fold-toggle') as HTMLElement | null

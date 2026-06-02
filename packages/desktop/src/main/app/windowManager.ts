@@ -282,10 +282,12 @@ class WindowManager extends TypedEmitter<WindowManagerEvents> {
       }
     }
 
+    if (!filePathScores) return []
+
     const buf: { windowId: number | null; fileList: string[] }[] = []
-    const len = filePathScores!.length
+    const len = filePathScores.length
     for (let i = 0; i < len; ++i) {
-      let { id: windowId, score } = filePathScores![i]
+      let { id: windowId, score } = filePathScores[i]
 
       if (score === -1) {
         // Skip files that already opened.

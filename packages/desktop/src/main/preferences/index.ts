@@ -66,17 +66,20 @@ class Preference extends TypedEmitter<PreferenceEvents> {
     let defaultSettings: Record<string, unknown> | null = null
     try {
       defaultSettings = JSON.parse(fs.readFileSync(this.staticPath, { encoding: 'utf8' }) || '{}')
+      if (!defaultSettings) {
+        throw new Error('Cannot load default settings.')
+      }
 
       // Set best theme on first application start.
       if (nativeTheme.shouldUseDarkColors) {
-        defaultSettings!.theme = 'dark'
+        defaultSettings.theme = 'dark'
       }
 
       // Set system language on first application start
       if (!this.hasPreferencesFile) {
         const systemLanguage = this._getSystemLanguage()
         if (systemLanguage) {
-          defaultSettings!.language = systemLanguage
+          defaultSettings.language = systemLanguage
         }
       }
     } catch (err) {
@@ -216,7 +219,8 @@ class Preference extends TypedEmitter<PreferenceEvents> {
       }
 
       // Attempt to match the primary part of the language (e.g. zh)
-      const primaryLanguage = systemLocale.split('-')[0]!
+      const [primaryLanguage] = systemLocale.split('-')
+      if (!primaryLanguage) return null
       const matchedLanguage = supportedLanguages.find((lang) => lang.startsWith(primaryLanguage))
 
       if (matchedLanguage) {

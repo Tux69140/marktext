@@ -569,9 +569,9 @@ class App {
       }
 
       const currentFileId = (normalized as { currentFileId?: string | null; currentFile?: { id?: string } })
-        .currentFileId
-        ?? (normalized as { currentFile?: { id?: string } }).currentFile?.id
-        ?? null
+        .currentFileId ??
+        (normalized as { currentFile?: { id?: string } }).currentFile?.id ??
+        null
 
       for (const tab of tabs) {
         if (!tab || typeof tab !== 'object') continue

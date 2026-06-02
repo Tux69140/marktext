@@ -1,9 +1,14 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment, @typescript-eslint/no-require-imports */
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
-'use strict'
 
-const path = require('path')
+import path from 'node:path'
+import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
+
+const require = createRequire(import.meta.url)
 const checker = require('license-checker')
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 // license-checker keys packages as "<name>@<version>", and excludePackages
 // matches that string exactly — name-only entries don't match. Build the
@@ -20,7 +25,7 @@ const workspaceExclusions = ['packages/desktop', 'packages/muyajs', 'packages/mu
   .concat('@marktext/file-icons')
   .join(';')
 
-const getLicenses = (rootDir, callback) => {
+export const getLicenses = (rootDir, callback) => {
   checker.init(
     {
       start: rootDir,
@@ -39,7 +44,7 @@ const getLicenses = (rootDir, callback) => {
 }
 
 // Check that all production dependencies are allowed.
-const validateLicenses = (rootDir) => {
+export const validateLicenses = (rootDir) => {
   getLicenses(rootDir, (err, packages, checker) => {
     if (err) {
       console.log(`[ERROR] ${err}`)
@@ -51,9 +56,4 @@ const validateLicenses = (rootDir) => {
     }
     console.log(checker.asSummary(packages))
   })
-}
-
-module.exports = {
-  getLicenses,
-  validateLicenses
 }

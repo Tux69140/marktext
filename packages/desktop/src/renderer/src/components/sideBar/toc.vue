@@ -71,7 +71,7 @@ const getDefaultExpandedTocKeys = () => {
 
 // Strip circular `parent` references so el-tree node-key matching works correctly
 type PlainNode = { slug: string; label: unknown; lvl: unknown; children: PlainNode[] }
-function stripParent(nodes: typeof toc.value): PlainNode[] {
+function stripParent (nodes: typeof toc.value): PlainNode[] {
   return nodes.map(({ slug, label, lvl, children }) => ({
     slug: slug as string,
     label,
@@ -82,14 +82,14 @@ function stripParent(nodes: typeof toc.value): PlainNode[] {
 const tocData = computed(() => stripParent(toc.value))
 initialExpandedTocKeys.value = getDefaultExpandedTocKeys()
 
-function applyCurrentKey() {
+function applyCurrentKey () {
   nextTick(() => {
     tocTreeRef.value?.setCurrentKey(activeHeadingSlug.value || null)
     tocTreeRef.value?.$el?.querySelector('.is-current')?.scrollIntoView({ block: 'nearest' })
   })
 }
 
-function collectExpandedKeys(nodes: Array<{ expanded?: boolean; key?: string; data?: { slug?: unknown }; childNodes?: unknown[] }>) {
+function collectExpandedKeys (nodes: Array<{ expanded?: boolean; key?: string; data?: { slug?: unknown }; childNodes?: unknown[] }>) {
   const keys: string[] = []
 
   for (const node of nodes) {
@@ -108,7 +108,7 @@ function collectExpandedKeys(nodes: Array<{ expanded?: boolean; key?: string; da
   return keys
 }
 
-function updateExpandedKeys() {
+function updateExpandedKeys () {
   nextTick(() => {
     const tab = currentFile.value
     const root = tocTreeRef.value?.store?.root

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* eslint-disable @typescript-eslint/ban-ts-comment, @typescript-eslint/no-require-imports */
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
 /**
  * Cross-platform postinstall: patch native-keymap for C++20, download Electron,
@@ -21,16 +21,106 @@
  * the local package.json are picked up correctly.
  */
 
-const { execSync } = require('child_process')
-const path = require('path')
-const fs = require('fs')
+import { execSync } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
+import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
 
+const require = createRequire(import.meta.url)
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 const repoRoot = path.join(__dirname, '..')
 const desktopRoot = path.join(repoRoot, 'packages', 'desktop')
 
 function run(cmd, opts = {}) {
   const { cwd = repoRoot, env = {} } = opts
   execSync(cmd, { stdio: 'inherit', cwd, env: { ...process.env, ...env } })
+}
+
+function tryRun(cmd, opts = {}) {
+  const { cwd = repoRoot, env = {} } = opts
+  try {
+    execSync(cmd, { stdio: 'pipe', cwd, env: { ...process.env, ...env } })
+    return { ok: true, error: null }
+  } catch (error) {
+    return { ok: false, error }
+  }
+}
+
+function quote(value) {
+  return `"${value.replace(/"/g, '\\"')}"`
+}
+
+function quotePowerShell(value) {
+  return `'${value.replace(/'/g, "''")}'`
+}
+
+function applyPatchesWithGit() {
+  const patchDir = path.join(desktopRoot, 'patches')
+  const patchFiles = fs.existsSync(patchDir)
+    ? fs.readdirSync(patchDir)
+      .filter(file => file.endsWith('.patch'))
+      .sort()
+    : []
+
+  for (const patchFile of patchFiles) {
+    const patchPath = path.join(patchDir, patchFile)
+    const check = tryRun(`git apply --check --ignore-space-change --ignore-whitespace ${quote(patchPath)}`, {
+      cwd: desktopRoot
+    })
+
+    if (check.ok) {
+      run(`git apply --ignore-space-change --ignore-whitespace ${quote(patchPath)}`, { cwd: desktopRoot })
+      continue
+    }
+
+    const reverseCheck = tryRun(
+      `git apply --reverse --check --ignore-space-change --ignore-whitespace ${quote(patchPath)}`,
+      { cwd: desktopRoot }
+    )
+
+    if (!reverseCheck.ok) {
+      throw check.error
+    }
+  }
+}
+
+function patchAppBuilderLib() {
+  const nsisTargetPath = require.resolve('app-builder-lib/out/targets/nsis/NsisTarget.js', {
+    paths: [desktopRoot]
+  })
+  const source = fs.readFileSync(nsisTargetPath, 'utf8')
+
+  if (source.includes('failed to launch temporary NSIS installer, retrying...')) {
+    return
+  }
+
+  const original = '            await (0, wine_1.execWine)(installerPath, null, [], { env: { __COMPAT_LAYER: "RunAsInvoker" } });'
+  const replacement = [
+    '            let retryCount = 0;',
+    '            while (true) {',
+    '                try {',
+    '                    await ensureNotBusy(installerPath);',
+    '                    await (0, wine_1.execWine)(installerPath, null, [], { env: { __COMPAT_LAYER: "RunAsInvoker" } });',
+    '                    break;',
+    '                }',
+    '                catch (error) {',
+    '                    if (process.platform !== "win32" || !/spawn UNKNOWN/i.test(error.message) || retryCount >= 2) {',
+    '                        throw error;',
+    '                    }',
+    '                    retryCount++;',
+    '                    builder_util_1.log.warn({ attempt: retryCount }, "failed to launch temporary NSIS installer, retrying...");',
+    '                    await new Promise(resolve => setTimeout(resolve, 2000));',
+    '                }',
+    '            }'
+  ].join('\n')
+
+  if (!source.includes(original)) {
+    throw new Error('app-builder-lib patch target not found in NsisTarget.js')
+  }
+
+  fs.writeFileSync(nsisTargetPath, source.replace(original, replacement))
 }
 
 // Detect which package manager invoked this postinstall so commands work
@@ -101,6 +191,55 @@ if (!fs.existsSync(electronInstall)) {
       run(`node "${electronInstall}"`, { env: { ELECTRON_MIRROR: mirror } })
     }
 
+    // On Windows, extract-zip can sometimes leave an incomplete dist/ on newer
+    // Node versions (for example only locales/ gets written, without
+    // electron.exe). Re-extract the cached zip with PowerShell's
+    // Expand-Archive so the binary is restored deterministically.
+    if (plat === 'win32' && !fs.existsSync(path.join(distDir, 'electron.exe'))) {
+      const { version } = require(path.join(desktopRoot, 'node_modules', 'electron', 'package.json'))
+      const arch = process.env.npm_config_arch || os.arch()
+      const zipName = `electron-v${version}-win32-${arch === 'arm64' ? 'arm64' : 'x64'}.zip`
+      const cacheRoot =
+        process.env.electron_config_cache ||
+        path.join(os.homedir(), 'AppData', 'Local', 'electron', 'Cache')
+
+      const findZip = (dir) => {
+        if (!fs.existsSync(dir)) return ''
+        const entries = fs.readdirSync(dir, { withFileTypes: true })
+          .sort((a, b) => a.name.localeCompare(b.name))
+
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name)
+          if (entry.isFile() && entry.name === zipName) return fullPath
+          if (entry.isDirectory()) {
+            const nested = findZip(fullPath)
+            if (nested) return nested
+          }
+        }
+
+        return ''
+      }
+
+      const zipPath = findZip(cacheRoot)
+
+      if (!zipPath) {
+        throw new Error(
+          'Electron zip not found in cache after download. ' +
+            'Try rerunning install with ELECTRON_MIRROR set.'
+        )
+      }
+
+      console.log('Electron dist incomplete on Windows, re-extracting with PowerShell...')
+      if (fs.existsSync(distDir)) fs.rmSync(distDir, { recursive: true, force: true })
+      fs.mkdirSync(distDir, { recursive: true })
+      run(
+        `powershell.exe -NoProfile -Command ` +
+          `"Expand-Archive -LiteralPath ${quotePowerShell(zipPath)} -DestinationPath ${quotePowerShell(distDir)} -Force"`
+      )
+      fs.writeFileSync(pathTxt, platformBinary)
+      fs.writeFileSync(path.join(distDir, 'version'), version)
+    }
+
     // yauzl v2.10.0 + Node v26+: openReadStream callback never fires for
     // compressed entries → extract-zip exits silently with incomplete dist/.
     // Re-extract using system unzip which handles the zip correctly.
@@ -149,7 +288,19 @@ if (!fs.existsSync(electronInstall)) {
 
 // ── 3. Apply C++20 patch to native-keymap (patches/ lives in packages/desktop) ──
 console.log('Applying patches...')
-run(`"${patchPackageBin}"`, { cwd: desktopRoot })
+try {
+  run(`"${patchPackageBin}"`, { cwd: desktopRoot })
+  patchAppBuilderLib()
+} catch (error) {
+  const output = `${error.stdout || ''}${error.stderr || ''}${error.message || ''}`
+  if (!/No package-lock\.json, npm-shrinkwrap\.json, or yarn\.lock file/i.test(output)) {
+    throw error
+  }
+
+  console.log('patch-package skipped: applying patches with git instead...')
+  applyPatchesWithGit()
+  patchAppBuilderLib()
+}
 
 // ── 4. Rebuild native modules for Electron ABI ──────────────────────────────
 console.log('Rebuilding native modules for Electron...')

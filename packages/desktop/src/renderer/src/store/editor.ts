@@ -1207,7 +1207,9 @@ export const useEditorStore = defineStore('editor', {
         const item = arr.splice(from, 1)
         if (item.length === 0) return false
 
-        arr.splice(to, 0, item[0]!)
+        const [movedItem] = item
+        if (movedItem === undefined) return false
+        arr.splice(to, 0, movedItem)
         return arr.length === len
       }
 
@@ -1465,7 +1467,9 @@ export const useEditorStore = defineStore('editor', {
         return
       }
 
-      const tab = this.tabs[this.tabIdToIndex[id]!]
+      const tabIndex = this.tabIdToIndex[id]
+      if (tabIndex === undefined) return
+      const tab = this.tabs[tabIndex]
       if (!tab) return
 
       const { filename, pathname, markdown: oldMarkdown, trimTrailingNewline } = tab

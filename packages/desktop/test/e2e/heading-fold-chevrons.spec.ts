@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import type { ElectronApplication, Page } from 'playwright'
+import type { Page } from 'playwright'
 import { enterSourceMode, launchWithMarkdown } from './helpers'
 
 const FIXTURE = [

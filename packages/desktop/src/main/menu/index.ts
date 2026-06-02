@@ -190,8 +190,11 @@ class AppMenu {
     const { windowMenus } = this
     windowMenus.set(window.id, this._buildEditorMenu())
 
-    const entry = windowMenus.get(window.id)!
-    const menu = entry.menu!
+    const entry = windowMenus.get(window.id)
+    const menu = entry?.menu
+    if (!entry || !menu) {
+      throw new Error(`Failed to initialize editor menu for window ${window.id}`)
+    }
 
     // Set source-code editor if preferred.
     const sourceCodeModeMenuItem = menu.getMenuItemById('sourceCodeModeMenuItem')

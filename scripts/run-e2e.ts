@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 const repoRoot = path.resolve(__dirname, '..')
 const desktopRoot = path.join(repoRoot, 'packages', 'desktop')
 const localE2eRoot = path.join(desktopRoot, 'test', 'e2e', '.local')
@@ -52,7 +55,8 @@ const args = ['exec', 'playwright', 'test', 'test/e2e', ...localSpecs, ...proces
 const result = spawnSync(pnpmBin, args, {
   cwd: desktopRoot,
   env: process.env,
-  stdio: 'inherit'
+  stdio: 'inherit',
+  shell: process.platform === 'win32'
 })
 
 if (result.error) {

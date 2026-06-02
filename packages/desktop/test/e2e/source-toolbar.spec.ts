@@ -305,7 +305,7 @@ test.describe('Source mode formatting toolbar', () => {
 
     await clickSourcePosition(page, { line: 2, ch: 2 })
     await typeInSource(page, 'X')
-    await waitForSourceValue(page, '| Name | Column 2 |\n| --- | --- |\n| CXell 1 | Cell 2 |\n')
+    await waitForSourceValue(page, '| Name | Column 2 |\n| --- | --- |\n| XCell 1 | Cell 2 |\n')
 
     await setSourceValue(page, 'before\nbelow\n', {
       anchor: { line: 0, ch: 6 },
@@ -314,11 +314,11 @@ test.describe('Source mode formatting toolbar', () => {
     await clickToolbarButton(page, 'Table')
     await clickSourcePosition(page, { line: 4, ch: 2 }, 0)
     await typeInSource(page, 'Y')
-    await waitForSourceValue(page, 'before\n\n| Column 1 | Column 2 |\n| --- | --- |\n| CYell 1 | Cell 2 |\n\nbelow\n')
+    await waitForSourceValue(page, 'before\n\n| Column 1 | Column 2 |\n| --- | --- |\n| YCell 1 | Cell 2 |\n\nbelow\n')
 
     await clickSourcePosition(page, { line: 2, ch: 13 }, 0)
     await typeInSource(page, 'Z')
-    await waitForSourceValue(page, 'before\n\n| Column 1 | ZColumn 2 |\n| --- | --- |\n| CYell 1 | Cell 2 |\n\nbelow\n')
+    await waitForSourceValue(page, 'before\n\n| Column 1 | ZColumn 2 |\n| --- | --- |\n| YCell 1 | Cell 2 |\n\nbelow\n')
 
     await setSourceValue(page, 'before\nbelow\n', {
       anchor: { line: 0, ch: 6 },

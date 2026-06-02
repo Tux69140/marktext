@@ -14,14 +14,16 @@ export const getRecommendTitleFromMarkdownString = (markdown: string): string =>
   // code blocks too.
   const tokens = markdown.match(/#{1,6} {1,}(.*\S.*)(?:\n|$)/g)
   if (!tokens) return ''
-  const headers = tokens.map((t) => {
-    const matches = t.trim().match(/(#{1,6}) {1,}(.+)/)!
+  const headers = tokens.flatMap((t) => {
+    const matches = t.trim().match(/(#{1,6}) {1,}(.+)/)
+    if (!matches) return []
     return {
-      level: matches[1]!.length,
-      content: matches[2]!.trim()
+      level: matches[1].length,
+      content: matches[2].trim()
     }
   })
-  return headers.sort((a, b) => a.level - b.level)[0]!.content
+  const firstHeader = headers.sort((a, b) => a.level - b.level)[0]
+  return firstHeader ? firstHeader.content : ''
 }
 
 /**

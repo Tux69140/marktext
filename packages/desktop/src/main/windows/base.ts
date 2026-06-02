@@ -120,9 +120,13 @@ class BaseWindow extends TypedEmitter<BaseWindowEvents> {
     const { codeFontFamily, codeFontSize, hideScrollbar, theme, titleBarStyle } =
       userPreference.getAll()
 
+    const rendererUrl = process.env['ELECTRON_RENDERER_URL']
+    if (process.env.NODE_ENV === 'development' && !rendererUrl) {
+      throw new Error('Missing ELECTRON_RENDERER_URL in development mode.')
+    }
     const baseUrl =
-      process.env.NODE_ENV === 'development'
-        ? process.env['ELECTRON_RENDERER_URL']!
+      process.env.NODE_ENV === 'development' && rendererUrl
+        ? rendererUrl
         : `file://${path.join(__dirname, '../renderer/index.html')}` // <-- This points to the path inside the packed ASAR archive, hence it is always correct
 
     const url = new URL(baseUrl)

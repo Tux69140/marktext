@@ -1,16 +1,16 @@
-import eslintJs from '@eslint/js'
-import pluginVue from 'eslint-plugin-vue'
-import pluginHtml from 'eslint-plugin-html'
-import pluginI18nJson from 'eslint-plugin-i18n-json'
-import pluginJsonc from 'eslint-plugin-jsonc'
-import neostandard from 'neostandard'
-import babelParser from '@babel/eslint-parser'
-import tseslint from 'typescript-eslint'
-import vueParser from 'vue-eslint-parser'
-import globals from 'globals'
+const eslintJs = require('@eslint/js')
+const pluginVue = require('eslint-plugin-vue')
+const pluginHtml = require('eslint-plugin-html')
+const pluginI18nJson = require('eslint-plugin-i18n-json')
+const pluginJsonc = require('eslint-plugin-jsonc')
+const neostandard = require('neostandard')
+const babelParser = require('@babel/eslint-parser')
+const tseslint = require('typescript-eslint')
+const vueParser = require('vue-eslint-parser')
+const globals = require('globals')
 const { configs: js } = eslintJs
 
-export default [
+module.exports = [
   // 0. Global ignores (must be first)
   {
     ignores: [
@@ -31,7 +31,7 @@ export default [
       'packages/muya/**',
       'packages/desktop/src/renderer/src/assets/symbolIcon/index.js',
       '**/*.min.json',
-      'test-results/**',
+      '**/test-results/**',
       'playwright-report/**'
     ]
   },

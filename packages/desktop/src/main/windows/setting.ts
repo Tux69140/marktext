@@ -55,62 +55,61 @@ class SettingWindow extends BaseWindow {
     }
 
     winOptions.backgroundColor = this._getPreferredBackgroundColor(theme)
-    let win: BrowserWindow | null = (this.browserWindow = new BrowserWindow(winOptions))
+    const browserWindow = (this.browserWindow = new BrowserWindow(winOptions))
 
-    win.webContents.on('did-fail-load', (_event, code, desc, url) => {
+    browserWindow.webContents.on('did-fail-load', (_event, code, desc, url) => {
       log.error(`did-fail-load ${code} ${desc} @ ${url}`)
     })
-    win.webContents.on('render-process-gone', (_event, details) => {
+    browserWindow.webContents.on('render-process-gone', (_event, details) => {
       log.error(`render-process-gone: ${details.reason} (${details.exitCode})`)
     })
 
-    this.id = win.id
+    this.id = browserWindow.id
 
     // Create a menu for the current window
-    appMenu.addSettingMenu(win)
+    appMenu.addSettingMenu(browserWindow)
 
-    win.once('ready-to-show', () => {
+    browserWindow.once('ready-to-show', () => {
       this.lifecycle = WindowLifecycle.READY
       this.emit('window-ready')
     })
 
-    win.on('focus', () => {
+    browserWindow.on('focus', () => {
       this.emit('window-focus')
-      win!.webContents.send('mt::window-active-status', { status: true })
+      browserWindow.webContents.send('mt::window-active-status', { status: true })
     })
 
     // Lost focus
-    win.on('blur', () => {
+    browserWindow.on('blur', () => {
       this.emit('window-blur')
-      win!.webContents.send('mt::window-active-status', { status: false })
+      browserWindow.webContents.send('mt::window-active-status', { status: false })
     })
 
-    win.on('close', (event) => {
+    browserWindow.on('close', (event) => {
       this.emit('window-close')
 
       event.preventDefault()
-      ipcMain.emit('window-close-by-id', win!.id)
+      ipcMain.emit('window-close-by-id', browserWindow.id)
     })
 
     // The window is now destroyed.
-    win.on('closed', () => {
+    browserWindow.on('closed', () => {
       this.emit('window-closed')
 
-      // Free window reference
-      win = null
+      this.browserWindow = null
     })
 
     this.lifecycle = WindowLifecycle.LOADING
-    win.loadURL(this._buildUrlString(this.id, env, preferences, category))
-    win.setSheetOffset(TITLE_BAR_HEIGHT)
+    browserWindow.loadURL(this._buildUrlString(this.id, env, preferences, category))
+    browserWindow.setSheetOffset(TITLE_BAR_HEIGHT)
 
     const devToolsAccelerator = keybindings.getAccelerator('view.toggle-dev-tools')
     if (env.debug && devToolsAccelerator) {
-      electronLocalshortcut.register(win, devToolsAccelerator, () => {
-        win!.webContents.toggleDevTools()
+      electronLocalshortcut.register(browserWindow, devToolsAccelerator, () => {
+        browserWindow.webContents.toggleDevTools()
       })
     }
-    return win
+    return browserWindow
   }
 
   protected override _buildUrlString(
