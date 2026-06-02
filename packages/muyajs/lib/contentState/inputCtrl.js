@@ -165,10 +165,10 @@ const inputCtrl = (ContentState) => {
       parent.lang = startBlock.text
     }
 
-    const shouldRender =
-      this.checkNotSameToken(startBlock.functionType, oldText, text) ||
-      this.checkNeedRender(cursor) ||
-      (this.isCollapse(cursor) && this.checkInlineUpdate(startBlock))
+    const needTokenRender = this.checkNotSameToken(startBlock.functionType, oldText, text)
+    const needMarkedRender = this.checkNeedRender(cursor)
+    const inlineUpdatedBlock = this.isCollapse(cursor) && this.checkInlineUpdate(startBlock)
+    const shouldRender = needTokenRender || needMarkedRender || inlineUpdatedBlock
 
     if (shouldRender || startBlock.functionType === 'codeContent') {
       this.partialRender()
