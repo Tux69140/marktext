@@ -8,6 +8,7 @@
       <editor
         :markdown="markdown"
         :cursor="cursor"
+        :heading-fold-keys="headingFoldKeys"
         :text-direction="textDirection"
         :platform="platform"
       />
@@ -15,6 +16,7 @@
         v-if="sourceCode"
         :markdown="markdown"
         :muya-index-cursor="muyaIndexCursor"
+        :heading-fold-keys="headingFoldKeys"
         :text-direction="textDirection"
       />
     </div>
@@ -37,6 +39,7 @@ defineProps<{
   // caller to widen.
   cursor: unknown
   muyaIndexCursor?: unknown
+  headingFoldKeys: string[]
   sourceCode: boolean
   showTabBar: boolean
   textDirection: string

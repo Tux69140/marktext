@@ -15,6 +15,7 @@ export interface TreeNode<T extends ListItem = ListItem> {
   lvl: number | null
   label: unknown
   slug: unknown
+  foldKey?: unknown
   children: Array<TreeNode<T>>
 }
 
@@ -23,6 +24,7 @@ class Node<T extends ListItem> implements TreeNode<T> {
   lvl: number | null
   label: unknown
   slug: unknown
+  foldKey?: unknown
   children: Array<TreeNode<T>>
 
   constructor(item: {
@@ -30,12 +32,14 @@ class Node<T extends ListItem> implements TreeNode<T> {
     lvl: number | null
     content?: unknown
     slug?: unknown
+    foldKey?: unknown
   }) {
-    const { parent, lvl, content, slug } = item
+    const { parent, lvl, content, slug, foldKey } = item
     this.parent = parent
     this.lvl = lvl
     this.label = content
     this.slug = slug
+    this.foldKey = foldKey
     this.children = []
   }
 

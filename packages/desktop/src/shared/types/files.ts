@@ -83,6 +83,8 @@ export interface IFileState {
   searchMatches: FileSearchMatches
   scrollTop: number
   muyaIndexCursor: unknown
+  headingFoldKeys: string[]
+  tocCollapsedKeys: string[]
   notifications: FileNotification[]
   lastSavedHistoryId?: number
   // Muya block tree; only populated for the actively edited tab.

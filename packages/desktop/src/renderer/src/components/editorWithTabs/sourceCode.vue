@@ -13,6 +13,11 @@ import { storeToRefs } from 'pinia'
 import codeMirror, { setCursorAtFirstLine, setTextDirection } from '../../codeMirror'
 import { wordCount as getWordCount } from 'muya/lib/utils'
 import { adjustCursor } from '../../util'
+import {
+  getHeadingFoldBaseKey,
+  getHeadingFoldKey,
+  normalizeHeadingFoldKeys
+} from '@/util/headingFold'
 import bus from '../../bus'
 import { oneDarkThemes, railscastsThemes } from '@/config'
 
@@ -46,6 +51,7 @@ const getSourceFoldOptions = () => ({
 const props = defineProps<{
   markdown?: string
   muyaIndexCursor?: unknown
+  headingFoldKeys: string[]
   textDirection: string
 }>()
 
@@ -59,6 +65,8 @@ const commitTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const viewDestroyed = ref(false)
 const tabId = ref<string | null>(null)
 let sourceHoverLine: number | null = null
+let isRestoringHeadingFolds = false
+let isBatchingHeadingFolds = false
 
 const { theme, sourceCode } = storeToRefs(preferencesStore)
 const { currentFile: currentTab } = storeToRefs(editorStore)
@@ -163,7 +171,8 @@ const prepareTabSwitch = () => {
     editorStore.LISTEN_FOR_CONTENT_CHANGE({
       id: tabId.value,
       markdown: newMarkdown,
-      muyaIndexCursor: cursor
+      muyaIndexCursor: cursor,
+      headingFoldKeys: getSourceHeadingFoldKeys()
     })
     tabId.value = null
   }
@@ -173,10 +182,16 @@ interface FileChangePayloadLike {
   id: string
   markdown?: string
   muyaIndexCursor?: unknown
+  headingFoldKeys?: unknown
 }
 
 const handleFileChange = (payload: unknown) => {
-  const { id, markdown: newMarkdown, muyaIndexCursor } = payload as FileChangePayloadLike
+  const {
+    id,
+    markdown: newMarkdown,
+    muyaIndexCursor,
+    headingFoldKeys
+  } = payload as FileChangePayloadLike
   if (!editor.value) return
 
   // On same-tab reload (external file change), preserve scroll across
@@ -236,6 +251,10 @@ const handleFileChange = (payload: unknown) => {
   } else {
     setCursorAtFirstLine(editor.value)
   }
+
+  if (headingFoldKeys !== undefined) {
+    restoreSourceHeadingFolds(headingFoldKeys)
+  }
 }
 
 const handleInvalidateImageCache = () => {
@@ -278,18 +297,20 @@ const foldAllSourceHeadings = () => {
   if (!sourceCode.value || !editor.value) return
 
   const cm = editor.value
-  cm.operation(() => {
-    clearSourceFolds(cm)
+  runHeadingFoldBatch(() => {
+    cm.operation(() => {
+      clearSourceFolds(cm)
 
-    for (let line = cm.firstLine(); line <= cm.lastLine(); line += 1) {
-      const pos = codeMirror.Pos(line, 0)
-      const range = codeMirror.fold.markdown(cm, pos)
+      for (let line = cm.firstLine(); line <= cm.lastLine(); line += 1) {
+        const pos = codeMirror.Pos(line, 0)
+        const range = codeMirror.fold.markdown(cm, pos)
 
-      if (range) {
-        cm.foldCode(pos, getSourceFoldOptions(), 'fold')
-        line = range.to.line
+        if (range) {
+          cm.foldCode(pos, getSourceFoldOptions(), 'fold')
+          line = range.to.line
+        }
       }
-    }
+    })
   })
 }
 
@@ -297,24 +318,28 @@ const unfoldAllSourceHeadings = () => {
   if (!sourceCode.value || !editor.value) return
 
   const cm = editor.value
-  cm.operation(() => clearSourceFolds(cm))
+  runHeadingFoldBatch(() => {
+    cm.operation(() => clearSourceFolds(cm))
+  })
 }
 
 const unfoldSourceLine = (line: number) => {
   if (!editor.value) return
 
   const cm = editor.value
-  cm.operation(() => {
-    const marks = cm.getAllMarks()
+  runHeadingFoldBatch(() => {
+    cm.operation(() => {
+      const marks = cm.getAllMarks()
 
-    for (const mark of marks) {
-      if (!mark.__isFold) continue
+      for (const mark of marks) {
+        if (!mark.__isFold) continue
 
-      const range = mark.find()
-      if (range && range.from.line <= line && line <= range.to.line) {
-        mark.clear()
+        const range = mark.find()
+        if (range && range.from.line <= line && line <= range.to.line) {
+          mark.clear()
+        }
       }
-    }
+    })
   })
 }
 
@@ -351,6 +376,96 @@ const getSourceHeadingAtLine = (cm: CMInstance, line: number): SourceHeading | n
   }
 
   return null
+}
+
+const getSourceHeadingFoldKeyByLine = (cm: CMInstance): Map<number, string> => {
+  const headingFoldKeyByLine = new Map<number, string>()
+  const occurrences: Record<string, number> = {}
+
+  for (let line = cm.firstLine(); line <= cm.lastLine(); line += 1) {
+    const heading = getSourceHeadingAtLine(cm, line)
+    if (!heading) continue
+
+    const item = {
+      lvl: heading.level,
+      content: heading.content
+    }
+    const baseKey = getHeadingFoldBaseKey(item)
+    const occurrence = (occurrences[baseKey] ?? 0) + 1
+    occurrences[baseKey] = occurrence
+    headingFoldKeyByLine.set(line, getHeadingFoldKey(item, occurrence))
+  }
+
+  return headingFoldKeyByLine
+}
+
+const getSourceHeadingFoldKeys = (): string[] => {
+  if (!editor.value) return []
+
+  const cm = editor.value
+  const headingFoldKeyByLine = getSourceHeadingFoldKeyByLine(cm)
+  const headingFoldKeys: string[] = []
+
+  for (const mark of cm.getAllMarks()) {
+    if (!mark.__isFold) continue
+
+    const range = mark.find()
+    const foldKey = range ? headingFoldKeyByLine.get(range.from.line) : null
+    if (foldKey) {
+      headingFoldKeys.push(foldKey)
+    }
+  }
+
+  return normalizeHeadingFoldKeys(headingFoldKeys)
+}
+
+const commitSourceHeadingFoldKeys = () => {
+  if (!tabId.value) return
+
+  editorStore.updateHeadingFoldKeys(tabId.value, getSourceHeadingFoldKeys())
+}
+
+const handleSourceFoldChange = () => {
+  if (isRestoringHeadingFolds || isBatchingHeadingFolds) return
+
+  commitSourceHeadingFoldKeys()
+}
+
+const runHeadingFoldBatch = (action: () => void) => {
+  isBatchingHeadingFolds = true
+  try {
+    action()
+  } finally {
+    isBatchingHeadingFolds = false
+  }
+
+  if (!isRestoringHeadingFolds) {
+    commitSourceHeadingFoldKeys()
+  }
+}
+
+const restoreSourceHeadingFolds = (headingFoldKeys: unknown) => {
+  if (!editor.value) return
+
+  const savedKeys = new Set(normalizeHeadingFoldKeys(headingFoldKeys))
+  const cm = editor.value
+
+  isRestoringHeadingFolds = true
+  try {
+    cm.operation(() => {
+      clearSourceFolds(cm)
+      if (!savedKeys.size) return
+
+      const headingFoldKeyByLine = getSourceHeadingFoldKeyByLine(cm)
+      for (const [line, foldKey] of headingFoldKeyByLine) {
+        if (savedKeys.has(foldKey)) {
+          cm.foldCode(codeMirror.Pos(line, 0), getSourceFoldOptions(), 'fold')
+        }
+      }
+    })
+  } finally {
+    isRestoringHeadingFolds = false
+  }
 }
 
 const findSourceLineForHeadingSlug = (slug: string): number | null => {
@@ -491,7 +606,8 @@ const saveContent = (cm: CMInstance) => {
         id: tabId.value,
         markdown: newMarkdown,
         wordCount,
-        muyaIndexCursor: cursor
+        muyaIndexCursor: cursor,
+        headingFoldKeys: getSourceHeadingFoldKeys()
       })
     } else {
       // This may occur during tab switching but should not occur otherwise.
@@ -568,6 +684,8 @@ onMounted(() => {
     event.preventDefault()
     event.stopPropagation()
   })
+  codeMirrorInstance.on('fold', handleSourceFoldChange)
+  codeMirrorInstance.on('unfold', handleSourceFoldChange)
 
   const wrapper = codeMirrorInstance.getWrapperElement()
   wrapper.addEventListener('mousemove', setSourceHoverLine)
@@ -582,6 +700,7 @@ onMounted(() => {
 
   editor.value = codeMirrorInstance
   tabId.value = id
+  restoreSourceHeadingFolds(props.headingFoldKeys)
   requestAnimationFrame(syncFoldGutterColor)
 
   listenChange()
@@ -601,6 +720,8 @@ onBeforeUnmount(() => {
   bus.off('unfoldAllHeadings', handleUnfoldAllHeadings)
   bus.off('scroll-to-header', scrollToSourceHeader)
   bus.off('image-action', handleImageAction)
+  editor.value.off('fold', handleSourceFoldChange)
+  editor.value.off('unfold', handleSourceFoldChange)
   const wrapper = editor.value.getWrapperElement()
   wrapper.removeEventListener('mousemove', setSourceHoverLine)
   wrapper.removeEventListener('mouseleave', clearSourceHoverLine)
@@ -611,6 +732,7 @@ onBeforeUnmount(() => {
     id: tabId.value,
     markdown: newMarkdown,
     muyaIndexCursor: cursor,
+    headingFoldKeys: getSourceHeadingFoldKeys(),
     renderCursor: true
   })
 })

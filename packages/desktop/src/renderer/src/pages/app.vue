@@ -23,6 +23,7 @@
         :markdown="markdown"
         :cursor="cursor"
         :muya-index-cursor="muyaIndexCursor"
+        :heading-fold-keys="headingFoldKeys"
         :source-code="sourceCode"
         :show-tab-bar="showTabBar"
         :text-direction="textDirection"
@@ -96,6 +97,7 @@ const wordCount = computed(() => currentFile.value?.wordCount)
 const muyaIndexCursor = computed<Record<string, unknown> | undefined>(
   () => currentFile.value?.muyaIndexCursor as Record<string, unknown> | undefined
 )
+const headingFoldKeys = computed<string[]>(() => currentFile.value?.headingFoldKeys ?? [])
 
 const hasCurrentFile = computed<boolean>(() => {
   return currentFile.value?.markdown !== undefined

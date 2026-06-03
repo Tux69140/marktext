@@ -147,9 +147,29 @@ const foldCtrl = (ContentState) => {
 
     if (didUnfold) {
       this.render(false)
+      this.muya.dispatchHeadingFoldsChange()
     }
 
     return didUnfold
+  }
+
+  ContentState.prototype.getFoldedHeadingKeys = function() {
+    return Array.from(this.foldedHeadings)
+  }
+
+  ContentState.prototype.setFoldedHeadingKeys = function(keys = []) {
+    this.foldedHeadings.clear()
+
+    for (const key of keys) {
+      const block = this.getBlock(key)
+      if (this.isHeadingBlock(block)) {
+        this.foldedHeadings.add(key)
+      }
+    }
+
+    this.ensureCursorVisible()
+    this.render()
+    this.muya.dispatchHeadingFoldsChange()
   }
 
   ContentState.prototype.toggleHeadingFold = function(heading) {
@@ -163,6 +183,7 @@ const foldCtrl = (ContentState) => {
     }
 
     this.render()
+    this.muya.dispatchHeadingFoldsChange()
   }
 
   ContentState.prototype.foldAllHeadings = function() {
@@ -174,11 +195,13 @@ const foldCtrl = (ContentState) => {
 
     this.ensureCursorVisible()
     this.render()
+    this.muya.dispatchHeadingFoldsChange()
   }
 
   ContentState.prototype.unfoldAllHeadings = function() {
     this.foldedHeadings.clear()
     this.render()
+    this.muya.dispatchHeadingFoldsChange()
   }
 
   ContentState.prototype.clearHeadingFolds = function() {

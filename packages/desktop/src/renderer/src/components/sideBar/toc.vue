@@ -8,13 +8,18 @@
     </div>
     <el-tree
       v-if="toc.length"
+      :key="tocTreeKey"
       :data="toc"
-      :default-expand-all="true"
+      node-key="foldKey"
+      :default-expanded-keys="tocExpandedKeys"
       :props="defaultProps"
+      :auto-expand-parent="false"
       :expand-on-click-node="false"
       :indent="10"
       :icon="ArrowRight"
       @node-click="handleClick"
+      @node-expand="handleNodeExpand"
+      @node-collapse="handleNodeCollapse"
     />
   </div>
 </template>
@@ -23,7 +28,9 @@
 import { useEditorStore } from '@/store/editor'
 import { usePreferencesStore } from '@/store/preferences'
 import bus from '../../bus'
+import type { TreeNode } from '@/util/listToTree'
 import { storeToRefs } from 'pinia'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowRight } from '@element-plus/icons-vue'
 
@@ -37,8 +44,24 @@ const defaultProps = {
   label: 'label'
 }
 
-const { toc } = storeToRefs(editorStore)
+const { currentFile, toc } = storeToRefs(editorStore)
 const { wordWrapInToc } = storeToRefs(preferencesStore)
+
+const getTocFoldKeys = (nodes: TreeNode[]): string[] => {
+  return nodes.flatMap((node) => {
+    const foldKey = typeof node.foldKey === 'string' ? [node.foldKey] : []
+    return foldKey.concat(getTocFoldKeys(node.children))
+  })
+}
+
+const tocExpandedKeys = computed(() => {
+  const collapsedKeys = new Set(currentFile.value?.tocCollapsedKeys ?? [])
+  return getTocFoldKeys(toc.value).filter((key) => !collapsedKeys.has(key))
+})
+
+const tocTreeKey = computed(() => {
+  return `${currentFile.value?.id ?? ''}:${tocExpandedKeys.value.join(',')}`
+})
 
 const handleClick = (data: { slug?: unknown }): void => {
   // editor.vue builds a CSS selector with `#${slug}` — bail out if the
@@ -46,6 +69,26 @@ const handleClick = (data: { slug?: unknown }): void => {
   // `undefined` / non-string payloads and producing `#undefined` selectors.
   if (typeof data.slug !== 'string' || data.slug.length === 0) return
   bus.emit('scroll-to-header', data.slug)
+}
+
+const updateCollapsedKeys = (foldKey: unknown, collapsed: boolean) => {
+  if (!currentFile.value || typeof foldKey !== 'string') return
+
+  const collapsedKeys = new Set(currentFile.value.tocCollapsedKeys)
+  if (collapsed) {
+    collapsedKeys.add(foldKey)
+  } else {
+    collapsedKeys.delete(foldKey)
+  }
+  editorStore.updateTocCollapsedKeys(currentFile.value.id, Array.from(collapsedKeys))
+}
+
+const handleNodeExpand = (data: { foldKey?: unknown }): void => {
+  updateCollapsedKeys(data.foldKey, false)
+}
+
+const handleNodeCollapse = (data: { foldKey?: unknown }): void => {
+  updateCollapsedKeys(data.foldKey, true)
 }
 </script>
 

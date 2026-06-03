@@ -132,6 +132,12 @@ class Muya {
     eventCenter.dispatch('change', { markdown, wordCount, cursor, muyaIndexCursor, history, toc })
   }
 
+  dispatchHeadingFoldsChange = () => {
+    this.eventCenter.dispatch('heading-folds-change', {
+      headingKeys: this.getFoldedHeadingKeys()
+    })
+  }
+
   dispatchSelectionChange = (cursor) => {
     const selectionChanges = this.contentState.selectionChange(cursor)
 
@@ -384,6 +390,14 @@ class Muya {
 
   unfoldBlockByKey(key) {
     return this.contentState.unfoldBlockByKey(key)
+  }
+
+  getFoldedHeadingKeys() {
+    return this.contentState.getFoldedHeadingKeys()
+  }
+
+  setFoldedHeadingKeys(keys) {
+    this.contentState.setFoldedHeadingKeys(keys)
   }
 
   undo() {

@@ -1,6 +1,7 @@
 import equal from 'deep-equal'
 import bus from '../bus'
 import { getUniqueId, deepClone } from '../util'
+import { addHeadingFoldKeys, normalizeHeadingFoldKeys } from '../util/headingFold'
 import listToTree, { type ListItem, type TreeNode } from '../util/listToTree'
 import {
   createDocumentState,
@@ -101,6 +102,7 @@ interface ContentChangePayload {
   muyaIndexCursor?: unknown
   history?: IFileState['history']
   toc?: TocItem[]
+  headingFoldKeys?: string[]
   blocks?: unknown
 }
 
@@ -248,6 +250,26 @@ export const useEditorStore = defineStore('editor', {
       debouncedSendBufferedState()
     },
 
+    updateHeadingFoldKeys(id: string, headingFoldKeys: unknown): void {
+      if (!(id in this.tabIdToIndex)) return
+
+      const tab = this.tabs[this.tabIdToIndex[id]]
+      if (!tab) return
+
+      tab.headingFoldKeys = normalizeHeadingFoldKeys(headingFoldKeys)
+      debouncedSendBufferedState()
+    },
+
+    updateTocCollapsedKeys(id: string, tocCollapsedKeys: unknown): void {
+      if (!(id in this.tabIdToIndex)) return
+
+      const tab = this.tabs[this.tabIdToIndex[id]]
+      if (!tab) return
+
+      tab.tocCollapsedKeys = normalizeHeadingFoldKeys(tocCollapsedKeys)
+      debouncedSendBufferedState()
+    },
+
     /**
      * Push a tab specific notification on stack that never disappears.
      */
@@ -329,6 +351,8 @@ export const useEditorStore = defineStore('editor', {
       const oldNotifications = tab.notifications
       // Preserve scroll across external reload so the editor stays put.
       const oldScrollTop = tab.scrollTop
+      const oldHeadingFoldKeys = tab.headingFoldKeys
+      const oldTocCollapsedKeys = tab.tocCollapsedKeys
       let oldHistory: IFileState['history'] | null = null
       const histIndex = tab.history.index
       if (histIndex >= 0 && tab.history.stack.length >= 1) {
@@ -351,6 +375,8 @@ export const useEditorStore = defineStore('editor', {
       tab.id = oldId
       tab.notifications = oldNotifications
       tab.scrollTop = oldScrollTop
+      tab.headingFoldKeys = oldHeadingFoldKeys
+      tab.tocCollapsedKeys = oldTocCollapsedKeys
       if (oldHistory) {
         tab.history = oldHistory
       }
@@ -372,7 +398,7 @@ export const useEditorStore = defineStore('editor', {
       if (currentFile && pathname === currentFile.pathname) {
         // save current state first
         this.currentFile = tab
-        const { id, cursor, history, scrollTop, muyaIndexCursor } = tab // Should not use blocks history as this is loaded from disk
+        const { id, cursor, history, scrollTop, muyaIndexCursor, headingFoldKeys } = tab // Should not use blocks history as this is loaded from disk
         bus.emit('file-changed', {
           id,
           markdown,
@@ -380,7 +406,8 @@ export const useEditorStore = defineStore('editor', {
           cursor,
           renderCursor: true,
           history,
-          scrollTop
+          scrollTop,
+          headingFoldKeys
         })
       }
       debouncedSendBufferedState()
@@ -783,8 +810,17 @@ export const useEditorStore = defineStore('editor', {
       const oldCurrentFile = this.currentFile
       let didUpdateCurrentFile = false
       if (oldCurrentFile == null || oldCurrentFile.id !== currentFile.id) {
-        const { id, markdown, cursor, history, pathname, scrollTop, blocks, muyaIndexCursor } =
-          currentFile
+        const {
+          id,
+          markdown,
+          cursor,
+          history,
+          pathname,
+          scrollTop,
+          blocks,
+          muyaIndexCursor,
+          headingFoldKeys
+        } = currentFile
         window.DIRNAME = pathname ? window.path.dirname(pathname) : ''
         this.currentFile = currentFile
         didUpdateCurrentFile = true
@@ -802,7 +838,8 @@ export const useEditorStore = defineStore('editor', {
           renderCursor: true,
           history,
           scrollTop,
-          blocks
+          blocks,
+          headingFoldKeys
         })
       }
 
@@ -972,8 +1009,17 @@ export const useEditorStore = defineStore('editor', {
           this.tabs[index] ?? this.tabs[index - 1] ?? this.tabs[0] ?? null
         this.currentFile = fileState
         if (fileState && typeof fileState.markdown === 'string') {
-          const { id, markdown, cursor, history, pathname, scrollTop, blocks, muyaIndexCursor } =
-            fileState
+          const {
+            id,
+            markdown,
+            cursor,
+            history,
+            pathname,
+            scrollTop,
+            blocks,
+            muyaIndexCursor,
+            headingFoldKeys
+          } = fileState
           window.DIRNAME = pathname ? window.path.dirname(pathname) : ''
           bus.emit('file-changed', {
             id,
@@ -983,7 +1029,8 @@ export const useEditorStore = defineStore('editor', {
             renderCursor: true,
             history,
             scrollTop,
-            blocks
+            blocks,
+            headingFoldKeys
           })
         } else {
           window.DIRNAME = ''
@@ -1063,8 +1110,17 @@ export const useEditorStore = defineStore('editor', {
         this.currentFile =
           this.tabs[tabIndex] ?? this.tabs[tabIndex - 1] ?? this.tabs[0] ?? null
         if (this.currentFile && typeof this.currentFile.markdown === 'string') {
-          const { id, markdown, cursor, history, pathname, scrollTop, blocks, muyaIndexCursor } =
-            this.currentFile
+          const {
+            id,
+            markdown,
+            cursor,
+            history,
+            pathname,
+            scrollTop,
+            blocks,
+            muyaIndexCursor,
+            headingFoldKeys
+          } = this.currentFile
           window.DIRNAME = pathname ? window.path.dirname(pathname) : ''
           bus.emit('file-changed', {
             id,
@@ -1074,7 +1130,8 @@ export const useEditorStore = defineStore('editor', {
             renderCursor: true,
             history,
             scrollTop,
-            blocks
+            blocks,
+            headingFoldKeys
           })
         }
       }
@@ -1331,6 +1388,7 @@ export const useEditorStore = defineStore('editor', {
       muyaIndexCursor,
       history,
       toc,
+      headingFoldKeys,
       blocks
     }: ContentChangePayload): void {
       const preferencesStore = usePreferencesStore()
@@ -1362,12 +1420,14 @@ export const useEditorStore = defineStore('editor', {
       if (cursor) tab.cursor = cursor
       if (muyaIndexCursor) tab.muyaIndexCursor = muyaIndexCursor
       if (history) tab.history = history
+      if (headingFoldKeys) tab.headingFoldKeys = normalizeHeadingFoldKeys(headingFoldKeys)
       if (blocks) tab.blocks = blocks
 
       // Only update TOC if it's the current file
-      if (id === this.currentFile?.id && toc && !equal(toc, this.listToc)) {
-        this.listToc = toc
-        this.toc = listToTree<TocItem>(toc)
+      const tocWithFoldKeys = toc ? addHeadingFoldKeys(toc) : null
+      if (id === this.currentFile?.id && tocWithFoldKeys && !equal(tocWithFoldKeys, this.listToc)) {
+        this.listToc = tocWithFoldKeys
+        this.toc = listToTree<TocItem>(tocWithFoldKeys)
       }
 
       const lastEditIndex = tab.history.lastEditIndex
@@ -1916,6 +1976,8 @@ interface BufferedTabState {
   wordCount: IFileState['wordCount']
   muyaIndexCursor: unknown
   scrollTop: number
+  headingFoldKeys: string[]
+  tocCollapsedKeys: string[]
 }
 
 const createBufferedTabState = (tab: Partial<IFileState> & { id: string }): BufferedTabState => {
@@ -1935,7 +1997,9 @@ const createBufferedTabState = (tab: Partial<IFileState> & { id: string }): Buff
     cursor: toSerializableValue(tab.cursor, defaultFileState.cursor),
     wordCount: toSerializableValue(tab.wordCount, defaultFileState.wordCount),
     muyaIndexCursor: toSerializableValue(tab.muyaIndexCursor, defaultFileState.muyaIndexCursor),
-    scrollTop: tab.scrollTop ?? defaultFileState.scrollTop
+    scrollTop: tab.scrollTop ?? defaultFileState.scrollTop,
+    headingFoldKeys: normalizeHeadingFoldKeys(tab.headingFoldKeys),
+    tocCollapsedKeys: normalizeHeadingFoldKeys(tab.tocCollapsedKeys)
   }
 }
 

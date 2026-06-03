@@ -108,6 +108,7 @@ import Printer from '@/services/printService'
 import { SpellcheckerLanguageCommand } from '@/commands'
 import { SpellChecker } from '@/spellchecker'
 import { isOsx, animatedScrollTo } from '@/util'
+import { addHeadingFoldKeys, normalizeHeadingFoldKeys } from '@/util/headingFold'
 import { moveImageToFolder, uploadImage } from '@/util/fileSystem'
 import { guessClipboardFilePath } from '@/util/clipboard'
 import { getCssForOptions, getHtmlToc, type PdfCssOptions, type HtmlTocOptions } from '@/util/pdf'
@@ -135,6 +136,7 @@ type ElInputNumberInstance = any
 const props = defineProps<{
   markdown?: string
   cursor?: unknown
+  headingFoldKeys: string[]
   textDirection: string
   platform?: string
 }>()
@@ -1062,11 +1064,45 @@ const handleDialogTableConfirm = () => {
 interface FileLoadedPayload {
   markdown?: string
   cursor?: unknown
+  headingFoldKeys?: unknown
+}
+
+const getStableHeadingFoldKeys = (): string[] => {
+  if (!editor.value) return []
+
+  const foldedHeadingKeys = new Set(editor.value.getFoldedHeadingKeys())
+  const toc = addHeadingFoldKeys(editor.value.getTOC())
+
+  return toc
+    .filter((item) => typeof item.slug === 'string' && foldedHeadingKeys.has(item.slug))
+    .map((item) => item.foldKey)
+}
+
+const restoreHeadingFolds = (headingFoldKeys: unknown) => {
+  if (!editor.value) return
+
+  const savedKeys = new Set(normalizeHeadingFoldKeys(headingFoldKeys))
+  const toc = addHeadingFoldKeys(editor.value.getTOC())
+  const foldedHeadingKeys = toc
+    .filter((item) => savedKeys.has(item.foldKey) && typeof item.slug === 'string')
+    .map((item) => item.slug)
+
+  editor.value.setFoldedHeadingKeys(foldedHeadingKeys)
+}
+
+const commitHeadingFoldKeys = () => {
+  if (!currentFile.value) return
+
+  editorStore.updateHeadingFoldKeys(currentFile.value.id, getStableHeadingFoldKeys())
 }
 
 // listen for `open-single-file` event, it will call this method only when open a new file.
 const setMarkdownToEditor = (payload: unknown) => {
-  const { markdown: newMarkdown, cursor: newCursor } = (payload ?? {}) as FileLoadedPayload
+  const {
+    markdown: newMarkdown,
+    cursor: newCursor,
+    headingFoldKeys
+  } = (payload ?? {}) as FileLoadedPayload
   if (editor.value) {
     editor.value.clearHistory()
     if (newCursor) {
@@ -1074,6 +1110,7 @@ const setMarkdownToEditor = (payload: unknown) => {
     } else {
       editor.value.setMarkdown(newMarkdown)
     }
+    restoreHeadingFolds(headingFoldKeys)
   }
 }
 
@@ -1084,6 +1121,7 @@ interface FileChangePayload {
   history?: unknown
   scrollTop?: number
   muyaIndexCursor?: unknown
+  headingFoldKeys?: unknown
   blocks?: unknown
 }
 
@@ -1096,6 +1134,7 @@ const handleFileChange = (payload: unknown) => {
     history,
     scrollTop,
     muyaIndexCursor,
+    headingFoldKeys,
     blocks = undefined
   } = (payload ?? {}) as FileChangePayload
   const { container } = editor.value
@@ -1109,6 +1148,10 @@ const handleFileChange = (payload: unknown) => {
       editor.value.setMarkdown(newMarkdown, newCursor, renderCursor, muyaIndexCursor, blocks)
     } else if (newCursor) {
       editor.value.setCursor(newCursor)
+    }
+
+    if (headingFoldKeys !== undefined) {
+      restoreHeadingFolds(headingFoldKeys)
     }
 
     if (typeof scrollTop === 'number') {
@@ -1228,6 +1271,7 @@ onMounted(() => {
   }
 
   editor.value = new Muya(ele, options)
+  restoreHeadingFolds(props.headingFoldKeys)
 
   const { container } = editor.value
 
@@ -1285,10 +1329,16 @@ onMounted(() => {
     const { id } = currentFile.value
     if (id) {
       editorStore.LISTEN_FOR_CONTENT_CHANGE(
-        Object.assign(changes, { id, blocks: editor.value.contentState.getBlocks() })
+        Object.assign(changes, {
+          id,
+          blocks: editor.value.contentState.getBlocks(),
+          headingFoldKeys: getStableHeadingFoldKeys()
+        })
       )
     }
   })
+
+  editor.value.on('heading-folds-change', commitHeadingFoldKeys)
 
   editor.value.on('scroll', (scrollEvent: { scrollTop: number }) => {
     if (currentFile.value) {
@@ -1403,6 +1453,7 @@ onBeforeUnmount(() => {
     editor.value.off('change')
     editor.value.off('scroll')
     editor.value.off('heading-copy-link')
+    editor.value.off('heading-folds-change', commitHeadingFoldKeys)
     editor.value.off('format-click')
     editor.value.off('selectionChange')
     editor.value.off('selectionFormats')
