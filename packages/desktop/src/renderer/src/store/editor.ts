@@ -108,6 +108,7 @@ interface ContentChangePayload {
   foldedHeadingKeys?: string[]
   foldedHeadingRefs?: IFileState['foldedHeadingRefs']
   sourceFoldedLines?: number[]
+  sourceFoldedHeadingRefs?: IFileState['foldedHeadingRefs']
 }
 
 interface SelectionChange {
@@ -407,7 +408,8 @@ export const useEditorStore = defineStore('editor', {
           muyaIndexCursor,
           foldedHeadingKeys,
           foldedHeadingRefs,
-          sourceFoldedLines
+          sourceFoldedLines,
+          sourceFoldedHeadingRefs
         } = tab // Should not use blocks history as this is loaded from disk
         bus.emit('file-changed', {
           id,
@@ -419,7 +421,8 @@ export const useEditorStore = defineStore('editor', {
           scrollTop,
           foldedHeadingKeys,
           foldedHeadingRefs,
-          sourceFoldedLines
+          sourceFoldedLines,
+          sourceFoldedHeadingRefs
         })
       }
       debouncedSendBufferedState()
@@ -864,7 +867,8 @@ export const useEditorStore = defineStore('editor', {
           muyaIndexCursor,
           foldedHeadingKeys,
           foldedHeadingRefs,
-          sourceFoldedLines
+          sourceFoldedLines,
+          sourceFoldedHeadingRefs
         } = currentFile
         window.DIRNAME = pathname ? window.path.dirname(pathname) : ''
         this.currentFile = currentFile
@@ -886,7 +890,8 @@ export const useEditorStore = defineStore('editor', {
           blocks: blocks ? asRawBlocks(blocks) : blocks,
           foldedHeadingKeys,
           foldedHeadingRefs,
-          sourceFoldedLines
+          sourceFoldedLines,
+          sourceFoldedHeadingRefs
         })
       }
 
@@ -1067,7 +1072,8 @@ export const useEditorStore = defineStore('editor', {
             muyaIndexCursor,
             foldedHeadingKeys,
             foldedHeadingRefs,
-            sourceFoldedLines
+            sourceFoldedLines,
+            sourceFoldedHeadingRefs
           } = fileState
           window.DIRNAME = pathname ? window.path.dirname(pathname) : ''
           bus.emit('file-changed', {
@@ -1081,7 +1087,8 @@ export const useEditorStore = defineStore('editor', {
             blocks: blocks ? asRawBlocks(blocks) : blocks,
             foldedHeadingKeys,
             foldedHeadingRefs,
-            sourceFoldedLines
+            sourceFoldedLines,
+            sourceFoldedHeadingRefs
           })
         } else {
           window.DIRNAME = ''
@@ -1172,7 +1179,8 @@ export const useEditorStore = defineStore('editor', {
             muyaIndexCursor,
             foldedHeadingKeys,
             foldedHeadingRefs,
-            sourceFoldedLines
+            sourceFoldedLines,
+            sourceFoldedHeadingRefs
           } = this.currentFile
           window.DIRNAME = pathname ? window.path.dirname(pathname) : ''
           bus.emit('file-changed', {
@@ -1186,7 +1194,8 @@ export const useEditorStore = defineStore('editor', {
             blocks: blocks ? asRawBlocks(blocks) : blocks,
             foldedHeadingKeys,
             foldedHeadingRefs,
-            sourceFoldedLines
+            sourceFoldedLines,
+            sourceFoldedHeadingRefs
           })
         }
       }
@@ -1325,11 +1334,12 @@ export const useEditorStore = defineStore('editor', {
       )
 
       if (selected) {
-        const { id, markdown, cursor, sourceFoldedLines } = fileState
+        const { id, markdown, cursor, sourceFoldedLines, sourceFoldedHeadingRefs } = fileState
         this.UPDATE_CURRENT_FILE(fileState)
         bus.emit('file-loaded', {
           id,
           markdown,
+          sourceFoldedHeadingRefs,
           sourceFoldedLines,
           cursor
         })
@@ -1393,11 +1403,11 @@ export const useEditorStore = defineStore('editor', {
           options as Record<string, unknown>
         )
       )
-      const { id, cursor, sourceFoldedLines } = docState
+      const { id, cursor, sourceFoldedLines, sourceFoldedHeadingRefs } = docState
 
       if (selected) {
         this.UPDATE_CURRENT_FILE(docState)
-        bus.emit('file-loaded', { id, markdown, cursor, sourceFoldedLines })
+        bus.emit('file-loaded', { id, markdown, cursor, sourceFoldedLines, sourceFoldedHeadingRefs })
       } else {
         this.tabs.push(docState)
         this.updateTabIdToIndex()
@@ -1453,7 +1463,8 @@ export const useEditorStore = defineStore('editor', {
       blocks,
       foldedHeadingKeys,
       foldedHeadingRefs,
-      sourceFoldedLines
+      sourceFoldedLines,
+      sourceFoldedHeadingRefs
     }: ContentChangePayload): void {
       const preferencesStore = usePreferencesStore()
       const { autoSave } = preferencesStore
@@ -1490,6 +1501,9 @@ export const useEditorStore = defineStore('editor', {
       if (Array.isArray(foldedHeadingKeys)) tab.foldedHeadingKeys = foldedHeadingKeys
       if (Array.isArray(foldedHeadingRefs)) tab.foldedHeadingRefs = foldedHeadingRefs
       if (Array.isArray(sourceFoldedLines)) tab.sourceFoldedLines = sourceFoldedLines
+      if (Array.isArray(sourceFoldedHeadingRefs)) {
+        tab.sourceFoldedHeadingRefs = sourceFoldedHeadingRefs
+      }
 
       // Only update TOC if it's the current file
       if (id === this.currentFile?.id && toc && !equal(toc, this.listToc)) {
@@ -2052,6 +2066,7 @@ interface BufferedTabState {
   foldedHeadingKeys?: string[]
   foldedHeadingRefs?: IFileState['foldedHeadingRefs']
   sourceFoldedLines?: number[]
+  sourceFoldedHeadingRefs?: IFileState['foldedHeadingRefs']
   expandedTocKeys?: string[]
 }
 
@@ -2078,6 +2093,9 @@ const createBufferedTabState = (tab: Partial<IFileState> & { id: string }): Buff
       ? toSerializableValue(tab.foldedHeadingRefs, [])
       : undefined,
     sourceFoldedLines: Array.isArray(tab.sourceFoldedLines) ? [...tab.sourceFoldedLines] : undefined,
+    sourceFoldedHeadingRefs: Array.isArray(tab.sourceFoldedHeadingRefs)
+      ? toSerializableValue(tab.sourceFoldedHeadingRefs, [])
+      : undefined,
     expandedTocKeys: Array.isArray(tab.expandedTocKeys) ? [...tab.expandedTocKeys] : undefined
   }
 }

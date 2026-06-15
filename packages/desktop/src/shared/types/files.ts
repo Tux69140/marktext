@@ -96,6 +96,7 @@ export interface IFileState {
   foldedHeadingKeys?: string[]
   foldedHeadingRefs?: FoldedHeadingRef[]
   sourceFoldedLines?: number[]
+  sourceFoldedHeadingRefs?: FoldedHeadingRef[]
   expandedTocKeys?: string[]
   isMixedLineEndings?: boolean
 }

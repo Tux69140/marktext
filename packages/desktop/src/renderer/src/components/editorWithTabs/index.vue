@@ -22,6 +22,7 @@
         :markdown="markdown"
         :muya-index-cursor="muyaIndexCursor"
         :source-folded-lines="sourceFoldedLines"
+        :source-folded-heading-refs="sourceFoldedHeadingRefs"
         :text-direction="textDirection"
       />
     </div>
@@ -49,6 +50,7 @@ defineProps<{
   muyaIndexCursor?: unknown
   sourceCode: boolean
   sourceFoldedLines?: number[]
+  sourceFoldedHeadingRefs?: IFileState['foldedHeadingRefs']
   showTabBar: boolean
   textDirection: string
   platform: string

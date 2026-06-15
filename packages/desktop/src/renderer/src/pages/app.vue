@@ -26,6 +26,7 @@
         :folded-heading-keys="foldedHeadingKeys"
         :folded-heading-refs="foldedHeadingRefs"
         :source-folded-lines="sourceFoldedLines"
+        :source-folded-heading-refs="sourceFoldedHeadingRefs"
         :source-code="sourceCode"
         :show-tab-bar="showTabBar"
         :text-direction="textDirection"
@@ -102,6 +103,7 @@ const muyaIndexCursor = computed<Record<string, unknown> | undefined>(
   () => currentFile.value?.muyaIndexCursor as Record<string, unknown> | undefined
 )
 const sourceFoldedLines = computed(() => currentFile.value?.sourceFoldedLines)
+const sourceFoldedHeadingRefs = computed(() => currentFile.value?.sourceFoldedHeadingRefs)
 const foldedHeadingKeys = computed(() => currentFile.value?.foldedHeadingKeys)
 const foldedHeadingRefs = computed(() => currentFile.value?.foldedHeadingRefs)
 

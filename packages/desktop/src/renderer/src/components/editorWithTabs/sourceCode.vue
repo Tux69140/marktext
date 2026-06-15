@@ -15,6 +15,7 @@ import { wordCount as getWordCount } from 'muya/lib/utils'
 import { adjustCursor } from '../../util'
 import bus from '../../bus'
 import { oneDarkThemes, railscastsThemes } from '@/config'
+import type { FoldedHeadingRef } from '@shared/types/files'
 
 // CodeMirror 5 ships no first-party types; the wrapper in src/renderer/src/
 // codeMirror/index.ts also keeps the surface intentionally loose.
@@ -59,6 +60,16 @@ interface MuyaIndexCursorLike {
 
 const SOURCE_FOLD_GUTTER = 'CodeMirror-foldgutter'
 const SOURCE_LINE_GUTTER = 'CodeMirror-linenumbers'
+const getSourceHeadingRefKey = (level: number, content: string): string => `${level}\u0000${content}`
+
+const getSourceHeadingRefLevel = (ref: FoldedHeadingRef | null | undefined): number | null => {
+  const level = Number(ref && ref.lvl)
+  return level >= 1 && level <= 6 ? level : null
+}
+
+const getSourceHeadingRefContent = (ref: FoldedHeadingRef | null | undefined): string | null => {
+  return typeof ref?.content === 'string' ? ref.content : null
+}
 
 const getSourceFoldOptions = () => ({
   rangeFinder: codeMirror.fold.markdown,
@@ -72,6 +83,7 @@ const props = defineProps<{
   markdown?: string
   muyaIndexCursor?: unknown
   sourceFoldedLines?: number[]
+  sourceFoldedHeadingRefs?: FoldedHeadingRef[]
   textDirection: string
 }>()
 
@@ -193,7 +205,8 @@ const prepareTabSwitch = () => {
       id: tabId.value,
       markdown: newMarkdown,
       muyaIndexCursor: cursor,
-      sourceFoldedLines: getSourceFoldedLines(editor.value)
+      sourceFoldedLines: getSourceFoldedLines(editor.value),
+      sourceFoldedHeadingRefs: getSourceFoldedHeadingRefs(editor.value)
     })
     tabId.value = null
   }
@@ -204,6 +217,7 @@ interface FileChangePayloadLike {
   markdown?: string
   muyaIndexCursor?: unknown
   sourceFoldedLines?: number[]
+  sourceFoldedHeadingRefs?: FoldedHeadingRef[]
   scrollTop?: number
 }
 
@@ -222,6 +236,31 @@ const getSourceFoldedLines = (cm: CMInstance): number[] => {
   return lines.sort((a, b) => a - b)
 }
 
+const getSourceFoldedHeadingRefs = (cm: CMInstance): FoldedHeadingRef[] => {
+  const refs: FoldedHeadingRef[] = []
+  const foldedLines = new Set(getSourceFoldedLines(cm))
+  const seen = new Map<string, number>()
+
+  for (let line = cm.firstLine(); line <= cm.lastLine(); line += 1) {
+    const heading = getSourceHeadingAtLine(cm, line)
+    if (!heading) continue
+
+    const refKey = getSourceHeadingRefKey(heading.level, heading.content)
+    const occurrence = (seen.get(refKey) || 0) + 1
+    seen.set(refKey, occurrence)
+
+    if (foldedLines.has(heading.line)) {
+      refs.push({
+        lvl: heading.level,
+        content: heading.content,
+        occurrence
+      })
+    }
+  }
+
+  return refs
+}
+
 const applySourceFoldedLines = (cm: CMInstance, lines: number[] | undefined) => {
   cm.operation(() => {
     clearSourceFolds(cm)
@@ -238,8 +277,71 @@ const applySourceFoldedLines = (cm: CMInstance, lines: number[] | undefined) => 
   })
 }
 
+const applySourceFoldedHeadingRefs = (
+  cm: CMInstance,
+  refs: FoldedHeadingRef[] | undefined
+) => {
+  cm.operation(() => {
+    clearSourceFolds(cm)
+
+    if (!Array.isArray(refs) || refs.length === 0) return
+
+    const wanted = new Map<string, Set<number>>()
+    for (const ref of refs) {
+      const level = getSourceHeadingRefLevel(ref)
+      const content = getSourceHeadingRefContent(ref)
+      const occurrence = Number(ref?.occurrence)
+
+      if (!level || content === null || !Number.isInteger(occurrence) || occurrence < 1) continue
+
+      const refKey = getSourceHeadingRefKey(level, content)
+      if (!wanted.has(refKey)) {
+        wanted.set(refKey, new Set())
+      }
+      wanted.get(refKey)?.add(occurrence)
+    }
+
+    const seen = new Map<string, number>()
+    for (let line = cm.firstLine(); line <= cm.lastLine(); line += 1) {
+      const heading = getSourceHeadingAtLine(cm, line)
+      if (!heading) continue
+
+      const refKey = getSourceHeadingRefKey(heading.level, heading.content)
+      const occurrence = (seen.get(refKey) || 0) + 1
+      seen.set(refKey, occurrence)
+
+      if (wanted.get(refKey)?.has(occurrence)) {
+        const pos = codeMirror.Pos(heading.line, 0)
+        const range = codeMirror.fold.markdown(cm, pos)
+        if (range) {
+          cm.foldCode(pos, getSourceFoldOptions(), 'fold')
+        }
+      }
+    }
+  })
+}
+
+const restoreSourceFolds = (
+  cm: CMInstance,
+  refs: FoldedHeadingRef[] | undefined,
+  lines: number[] | undefined
+) => {
+  if (Array.isArray(refs)) {
+    applySourceFoldedHeadingRefs(cm, refs)
+  } else {
+    applySourceFoldedLines(cm, lines)
+  }
+}
+
 const handleFileChange = (payload: unknown) => {
-  const { id, markdown: newMarkdown, muyaIndexCursor, sourceFoldedLines, scrollTop } = payload as FileChangePayloadLike
+  const {
+    id,
+    markdown: newMarkdown,
+    muyaIndexCursor,
+    sourceFoldedLines,
+    sourceFoldedHeadingRefs,
+    scrollTop
+  } = payload as FileChangePayloadLike
   if (!editor.value) return
 
   // On same-tab reload (external file change), preserve scroll across
@@ -286,7 +388,7 @@ const handleFileChange = (payload: unknown) => {
     editor.value.setValue(newMarkdown)
     requestAnimationFrame(() => {
       if (!editor.value || tabId.value !== id) return
-      applySourceFoldedLines(editor.value, sourceFoldedLines)
+      restoreSourceFolds(editor.value, sourceFoldedHeadingRefs, sourceFoldedLines)
     })
     if (didChange) {
       clearNativeHistory(editor.value)
@@ -571,7 +673,8 @@ const saveContent = (cm: CMInstance) => {
         markdown: newMarkdown,
         wordCount,
         muyaIndexCursor: cursor,
-        sourceFoldedLines: getSourceFoldedLines(cm)
+        sourceFoldedLines: getSourceFoldedLines(cm),
+        sourceFoldedHeadingRefs: getSourceFoldedHeadingRefs(cm)
       })
     } else {
       // This may occur during tab switching but should not occur otherwise.
@@ -936,6 +1039,13 @@ const insertSourceTable = (): void => {
 
 const insertSourceFrontMatter = (): void => {
   const cm = editor.value
+  const existingRange = getExistingFrontMatterRange(cm)
+
+  if (existingRange) {
+    focusSourceEditor(cm, getFrontMatterSelection(cm, existingRange))
+    return
+  }
+
   const origin = { line: 0, ch: 0 }
   const template = '---\ntitle: \n---\n\n'
   const titleCursor = getCursorByOffset(origin, template, 11)
@@ -956,6 +1066,49 @@ const insertSourceFrontMatter = (): void => {
 
 const stripLinePrefix = (line: string): string => {
   return line.replace(/^\s{0,3}(?:[-+*]\s(?:\[[ xX]\]\s)?|\d+[.)]\s|>\s?|#{1,6}\s+)/, '')
+}
+
+const isSetextUnderline = (line: string | undefined): boolean => {
+  return typeof line === 'string' && /^[=-]+\s*$/.test(line)
+}
+
+const getExistingFrontMatterRange = (cm: CMInstance): { startLine: number, endLine: number } | null => {
+  const firstLine = cm.getLine(0)
+  if (!/^---\s*$/.test(firstLine)) return null
+
+  for (let line = 1; line <= cm.lastLine(); line += 1) {
+    if (/^---\s*$/.test(cm.getLine(line))) {
+      return {
+        startLine: 0,
+        endLine: line
+      }
+    }
+  }
+
+  return null
+}
+
+const getFrontMatterSelection = (
+  cm: CMInstance,
+  range: { startLine: number, endLine: number }
+): SourceSelection => {
+  for (let line = range.startLine + 1; line < range.endLine; line += 1) {
+    const text = cm.getLine(line)
+    const match = /^title\s*:\s*/.exec(text)
+    if (match) {
+      const start = match[0].length
+      return {
+        anchor: { line, ch: start },
+        focus: { line, ch: text.length }
+      }
+    }
+  }
+
+  const fallbackLine = Math.min(range.startLine + 1, range.endLine)
+  return {
+    anchor: { line: fallbackLine, ch: 0 },
+    focus: { line: fallbackLine, ch: cm.getLine(fallbackLine).length }
+  }
 }
 
 const getListMarkerLength = (line: string): number => {
@@ -1003,10 +1156,58 @@ const replaceSelectedLines = (
 }
 
 const setSourceHeading = (level: number): void => {
-  replaceSelectedLines((lines) => {
-    const prefix = `${'#'.repeat(level)} `
-    return lines.map((line) => `${prefix}${line.replace(/^\s{0,3}#{1,6}\s+/, '') || 'Heading'}`)
+  const cm = editor.value
+  const from = cm.getCursor('from')
+  const to = cm.getCursor('to')
+  let startLine = Math.min(from.line, to.line)
+  let endLine = Math.max(from.line, to.line)
+
+  if (to.ch === 0 && endLine > startLine) {
+    endLine -= 1
+  }
+
+  if (startLine > cm.firstLine() && isSetextUnderline(cm.getLine(startLine))) {
+    const previousHeading = getSourceHeadingAtLine(cm, startLine - 1)
+    if (previousHeading && previousHeading.line === startLine - 1) {
+      startLine -= 1
+    }
+  }
+
+  const prefix = `${'#'.repeat(level)} `
+  const replacementLines: string[] = []
+  let effectiveEndLine = endLine
+
+  for (let line = startLine; line <= effectiveEndLine; line += 1) {
+    const currentLine = cm.getLine(line)
+    const nextLine = cm.getLine(line + 1)
+    const heading = getSourceHeadingAtLine(cm, line)
+    const isSetextHeading = !!heading && isSetextUnderline(nextLine)
+    const normalized = heading ? heading.content : stripLinePrefix(currentLine).trim()
+
+    replacementLines.push(`${prefix}${normalized || 'Heading'}`)
+
+    if (isSetextHeading) {
+      if (line + 1 > effectiveEndLine) {
+        effectiveEndLine = line + 1
+      }
+      line += 1
+    }
+  }
+
+  const replacement = replacementLines.join('\n')
+  const start = { line: startLine, ch: 0 }
+  const end = { line: effectiveEndLine, ch: cm.getLine(effectiveEndLine).length }
+  const replacementEnd = {
+    line: startLine + replacementLines.length - 1,
+    ch: replacementLines[replacementLines.length - 1].length
+  }
+
+  cm.operation(() => {
+    cm.replaceRange(replacement, start, end)
+    cm.setSelection(start, replacementEnd, { scroll: false })
   })
+  requestAnimationFrame(() => cm.focus())
+  setTimeout(() => saveContent(cm), 0)
 }
 
 const setSourceList = (marker: 'bullet' | 'ordered' | 'task'): void => {
@@ -1138,14 +1339,14 @@ onMounted(() => {
     const cm = createSourceEditor(markdown ?? '', { anchor, focus }, true)
     requestAnimationFrame(() => {
       if (cm) {
-        applySourceFoldedLines(cm, props.sourceFoldedLines)
+        restoreSourceFolds(cm, props.sourceFoldedHeadingRefs, props.sourceFoldedLines)
       }
     })
   } else {
     const cm = createSourceEditor(markdown ?? '')
     requestAnimationFrame(() => {
       if (cm) {
-        applySourceFoldedLines(cm, props.sourceFoldedLines)
+        restoreSourceFolds(cm, props.sourceFoldedHeadingRefs, props.sourceFoldedLines)
       }
     })
   }

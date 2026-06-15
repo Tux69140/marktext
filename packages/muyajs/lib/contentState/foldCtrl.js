@@ -256,6 +256,7 @@ const foldCtrl = (ContentState) => {
 
     if (this.isHeadingFolded(heading)) {
       this.foldedHeadings.delete(heading.key)
+      this.refreshFoldHiddenBlocks()
     } else {
       this.foldedHeadings.add(heading.key)
       this.refreshFoldHiddenBlocks()

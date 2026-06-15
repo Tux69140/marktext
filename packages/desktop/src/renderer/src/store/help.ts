@@ -86,6 +86,7 @@ const documentStateKeys = [
   'foldedHeadingKeys',
   'foldedHeadingRefs',
   'sourceFoldedLines',
+  'sourceFoldedHeadingRefs',
   'expandedTocKeys',
   'notifications'
 ] as const satisfies ReadonlyArray<keyof IFileState>
